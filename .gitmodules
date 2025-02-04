@@ -2,34 +2,27 @@
 	path = libs/stb
 	url = git@github.com:nothings/stb.git
 
-[submodule "libs/OpenImageDenoise"]
-	path = libs/OpenImageDenoise
-	url = git@github.com:OpenImageDenoise/oidn.git
-
 [submodule "libs/ImGui"]
 	path = libs/ImGui
 	url = git@github.com:ocornut/imgui.git
+	branch = docking
 
 [submodule "libs/pugixml"]
 	path = libs/pugixml
 	url = git@github.com:zeux/pugixml.git
 
-[submodule "libs/oneTBB"]
-	path = libs/oneTBB
-	url = git@github.com:oneapi-src/oneTBB.git
-
 [submodule "libs/pngwriter"]
 	path = libs/pngwriter
 	url = git@github.com:pngwriter/pngwriter.git
-[submodule "libs/glfw"]
-	path = libs/glfw
-	url = git@github.com:glfw/glfw.git
+
 [submodule "libs/libpng"]
 	path = libs/libpng
 	url = git@github.com:glennrp/libpng.git
+
 [submodule "libs/zlib"]
 	path = libs/zlib
 	url = git@github.com:madler/zlib.git
+
 [submodule "libs/freetype"]
 	path = libs/freetype
 	url = https://gitlab.freedesktop.org/freetype/freetype.git
