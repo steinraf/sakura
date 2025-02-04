@@ -18,6 +18,7 @@ public:
     OpenGLViewport(int width, int height, std::string title, Camera camera);
 
     void renderFrame(const Scene& scene);
+    void translateCamera(const Eigen::Vector3f& translation);
 
 private:
     ImVec2 size;
@@ -36,7 +37,7 @@ public:
     explicit GUI(bool fullscreen);
     ~GUI();
 
-    void loop();
+    void loop(const Scene& scene);
 
     [[nodiscard]] Eigen::Vector2f getWindowSize() const;
 

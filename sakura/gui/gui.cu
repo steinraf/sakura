@@ -7,8 +7,6 @@
 
 #include "gui.cuh"
 
-
-
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
@@ -88,21 +86,28 @@ GUI::~GUI() {
     glfwTerminate();
 }
 
-void GUI::loop() {
+void GUI::loop(const Scene& scene) {
 
     std::cout << "Initializing GUI loop\n";
 
+    auto camTf = Eigen::Isometry3f::Identity();
 
-    auto scene = SceneBuilder()
-        .addObj("scenes/cube.obj").build();
+    float eyeWidth = 1.0;
 
-    auto openglViewport = OpenGLViewport(1920, 1080, "viewport", Camera{});
+    camTf.translate(Eigen::Vector3f{-eyeWidth/2.0f, 5, -30});
+    auto openglViewport = OpenGLViewport(1080, 1080, "viewport", Camera{camTf, 35, 1.0f, 0.0, 30.0});
+    camTf.translate(Eigen::Vector3f{eyeWidth, 0, 0});
+    auto openglViewport2 = OpenGLViewport(1080, 1080, "viewport2", Camera{camTf, 35, 1.0f, 0.0, 30.0});
 
 
 
     std::cout << "Starting GUI loop\n";
 
+    float t = 0.0;
+
     while (!glfwWindowShouldClose(window)){
+
+        t += 0.01;
 
         glfwPollEvents();
 
@@ -118,6 +123,12 @@ void GUI::loop() {
             ImGui::Begin("main_window", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
             openglViewport.renderFrame(scene);
+            openglViewport2.renderFrame(scene);
+
+            openglViewport.translateCamera(Eigen::Vector3f{std::sin(t) * 0.01f, 0, std::cos(t) * 0.01f});
+            openglViewport2.translateCamera(Eigen::Vector3f{std::sin(t) * 0.01f, 0, std::cos(t) * 0.01f});
+
+
 
             ImGui::End();
         }
@@ -192,6 +203,11 @@ void OpenGLViewport::renderFrame(const Scene& scene) {
     cudaSurfaceObject_t surface;
     checkCudaErrors(cudaCreateSurfaceObject(&surface, &resDesc));
 
+    ImGui::SliderFloat("Camera X", &camera.cameraTransform.translation()[0], -100, 100);
+    ImGui::SliderFloat("Camera Y", &camera.cameraTransform.translation()[1], -100, 100);
+    ImGui::SliderFloat("Camera Z", &camera.cameraTransform.translation()[2], -100, 100);
+
+
     scene.render(surface, camera, size);
 
 
@@ -211,4 +227,7 @@ void OpenGLViewport::renderFrame(const Scene& scene) {
     ImGui::Image(texture, size);
 
     ImGui::End();
+}
+void OpenGLViewport::translateCamera(const Eigen::Vector3f &translation) {
+    camera.cameraTransform.translate(translation);
 }

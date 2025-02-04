@@ -126,13 +126,15 @@ add_executable(${PROJECT_NAME}
         sakura/geometry/ray.cu
         sakura/scene/scene.cu
         sakura/camera/camera.cu
-        sakura/camera/camera.cuh
+        sakura/acceleration/aabb.cu
+        sakura/acceleration/bvh.cu
 )
 
 
 
 target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
         -O3
+        --extended-lambda
         -diag-suppress 20012
         -fopenmp
         -funroll-loops

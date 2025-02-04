@@ -13,3 +13,4 @@ imgui.ini
 report
 libs/ispc-v1.17.0-windows
 libs/glew-2.1.0
+scenes/models

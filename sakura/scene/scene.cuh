@@ -9,17 +9,19 @@
 #include <iostream>
 
 #include "imgui.h"
+#include "pngwriter.h"
+
 
 #include "../geometry/triangle.cuh"
 #include "../camera/camera.cuh"
-#include "pngwriter.h"
+#include "../acceleration/bvh.cuh"
 
 
 void checkCudaErrors(cudaError result);
 
-__global__ void render_kern(Triangle *triangles, size_t triangleCount,
+__global__ void render_kern(BVH *bvh,
                             cudaSurfaceObject_t surface,
-                            Eigen::Transform<float, 3, Eigen::Affine> cameraTf,
+                            Camera camera,
                             int width, int height);
 
 
@@ -31,8 +33,7 @@ public:
 private:
     friend class SceneBuilder;
     Scene() = default;
-    Triangle *triangles;
-    size_t triangleCount;
+    BVH *bvh;
 };
 
 class SceneBuilder {
@@ -46,19 +47,14 @@ public:
             Eigen::Transform<float, 3, Eigen::Affine> tf =
                     Eigen::Transform<float, 3, Eigen::Affine>::Identity());
 
-    SceneBuilder &setWorldToCamera(
-            Eigen::Transform<float, 3, Eigen::Affine> tf);
-
     SceneBuilder &addTriangle(const Triangle &triangle);
-
-    SceneBuilder &setWindowSize(int width, int height);
 
     [[nodiscard]] Scene build();
 
 private:
     std::vector<Triangle> triangles;
     std::optional<Eigen::Vector2i> windowSize;
-    std::optional<Eigen::Transform<float, 3, Eigen::Affine>> cameraTf;
 };
 
 
+__device__ __host__ constexpr uint32_t LeftShift3(uint32_t x) noexcept;
