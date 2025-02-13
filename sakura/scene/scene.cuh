@@ -1,12 +1,16 @@
 #pragma once
 
-#include <omp.h>
+
+
 
 #include <chrono>
 #include <fstream>
 #include <optional>
 #include <vector>
 #include <iostream>
+
+#include <omp.h>
+#include <curand_kernel.h>
 
 #include "imgui.h"
 #include "pngwriter.h"
@@ -19,16 +23,11 @@
 
 void checkCudaErrors(cudaError result);
 
-__global__ void render_kern(BVH *bvh,
-                            cudaSurfaceObject_t surface,
-                            Camera camera,
-                            int width, int height);
-
 
 class Scene {
 
 public:
-    void render(cudaSurfaceObject_t surface, Camera& camera, const ImVec2& windowSize) const;
+    void render(cudaSurfaceObject_t surface, Camera& camera, curandState *rngStates, const ImVec2& windowSize, int spp) const;
 
 private:
     friend class SceneBuilder;
@@ -54,6 +53,7 @@ public:
 private:
     std::vector<Triangle> triangles;
     std::optional<Eigen::Vector2i> windowSize;
+
 };
 
 

@@ -5,8 +5,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 
-
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -14,7 +12,6 @@ set(CMAKE_CUDA_STANDARD 20)
 
 
 find_package(Eigen3 REQUIRED)
-
 
 
 include(FindCUDA/select_compute_arch)
@@ -29,7 +26,6 @@ message("COMPILING FOR CUDA_ARCH_LIST: " "${CUDA_ARCH_LIST}")
 set(OIDN_NEURAL_RUNTIME DNNL)
 
 find_package(TBB REQUIRED)
-
 
 
 include_directories(libs/pugixml/src)
@@ -49,10 +45,9 @@ include_directories(libs/glew-2.1.0/include)
 
 
 find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
-if(NOT WAYLAND_SCANNER_EXECUTABLE)
+if (NOT WAYLAND_SCANNER_EXECUTABLE)
     set(GLFW_BUILD_WAYLAND False)
-endif()
-
+endif ()
 
 
 include(FetchContent)
@@ -67,7 +62,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(glfw)
 
 
-
 include_directories(libs/stb)
 include_directories(libs/ImGui)
 include_directories(libs/ImGui/backends)
@@ -76,7 +70,6 @@ include_directories(libs/glfw/include)
 
 
 add_library(pugixml STATIC libs/pugixml/src/pugixml.cpp)
-
 
 
 find_package(PNGwriter 0.7.0 REQUIRED)
@@ -91,16 +84,14 @@ include_directories(${OPENGL_INCLUDE_DIRS})
 #find_package(CUDA REQUIRED)
 include(CheckLanguage)
 check_language(CUDA)
-if(CMAKE_CUDA_COMPILER)
+if (CMAKE_CUDA_COMPILER)
     enable_language(CUDA)
 
     # to tell your code it was found via #ifdef USE_CUDA:
     add_definitions(-DUSE_CUDA)
 
     include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-endif()
-
-
+endif ()
 
 
 add_executable(${PROJECT_NAME}
@@ -128,13 +119,19 @@ add_executable(${PROJECT_NAME}
         sakura/camera/camera.cu
         sakura/acceleration/aabb.cu
         sakura/acceleration/bvh.cu
+        sakura/rng/sampler.cu
+        sakura/rng/sampler.cuh
+        sakura/integrator/integrators.cu
+        sakura/integrator/integrators.cuh
+        sakura/statistics/timing.cpp
+        sakura/statistics/timing.h
 )
-
 
 
 target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
         -O3
         --extended-lambda
+        --expt-relaxed-constexpr
         -diag-suppress 20012
         -fopenmp
         -funroll-loops

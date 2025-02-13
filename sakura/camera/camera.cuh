@@ -2,9 +2,12 @@
 // Created by steinraf on 04.02.25.
 //
 
+#pragma once
+
 #include <Eigen/Dense>
 
 #include "../geometry/ray.cuh"
+#include "../rng/sampler.cuh"
 
 class Camera {
 public:
@@ -16,12 +19,14 @@ public:
 
     // Takes in screen-space coordinates u, v and sampler
     // returns ray originating from the camera
-    __device__ Ray getRay(float u, float v) const;
+    __device__ Ray getRay(float u, float v, Sampler& sampler) const;
 
-public:
-    Eigen::Isometry3f cameraTransform;
+    __host__ void createTranslationSlider();
+
+    __host__ __device__ void translate(const Eigen::Vector3f& x);
+
 private:
-
+    Eigen::Isometry3f cameraTransform;
     Eigen::Projective3f sampleToCamera;
     float k;
     float near, far;

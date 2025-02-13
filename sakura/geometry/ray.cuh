@@ -7,7 +7,7 @@
 #include <Eigen/Dense>
 #include <cuda/std/limits>
 
-static constexpr float RAY_EPSILON = 0.0001f;
+__device__ constexpr float RAY_EPSILON = 0.0001f;
 
 struct Ray {
     __host__ __device__ Ray(Eigen::Vector3f  origin, Eigen::Vector3f  dir,

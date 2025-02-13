@@ -2,9 +2,13 @@
 // Created by steinraf on 04.02.25.
 //
 
-#include "scene.cuh"
+
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
+
+#include "scene.cuh"
+#include "../integrator/integrators.cuh"
+
 
 void checkCudaErrors(cudaError result){
     if (result != cudaSuccess) {
@@ -13,59 +17,8 @@ void checkCudaErrors(cudaError result){
     }
 }
 
-__global__ void render_kern(BVH *bvh, cudaSurfaceObject_t surface, Camera camera, int width, int height){
 
-    for (unsigned int pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
-        pixelIndex < width * height;
-        pixelIndex += blockDim.x * gridDim.x) {
-
-        unsigned int x = pixelIndex % width, y = height - 1 - pixelIndex / width;
-
-        auto color = Eigen::Vector3f{0.0, 0.0, 0.0};
-        auto screenPos = Eigen::Vector3f{x * 1.f / width,
-                                         y * 1.f / height, 0.0f};
-
-
-        auto ray =  camera.getRay(float(x) / width, float(y) / height) ;
-
-        Intersection intersection;
-        auto t = Eigen::Vector3f{1.0, 1.0, 1.0};
-        const Eigen::Vector3f backgroundColor =
-                1.f * Eigen::Vector3f{1.0, 0.0, 0.0};
-
-        while(true){
-            if (!bvh->intersect(ray, intersection)) {
-                color.array() += t.array() * backgroundColor.array();
-                break;
-            }
-
-
-
-            const auto &triangle = *intersection.triangle;
-
-            const Eigen::Vector3f bary = {
-                    1.0f - intersection.uv[0] - intersection.uv[1],
-                    intersection.uv[0], intersection.uv[1]};
-
-
-            auto normal = Eigen::Vector3f{bary[0] * triangle.n0 +
-                                          bary[1] * triangle.n1 +
-                                          bary[2] * triangle.n2};
-
-            float orientation = abs(normal.dot(ray.dir));
-            color = Eigen::Vector3f{orientation, orientation,
-                                    orientation};
-
-            ray.maxDist = intersection.t;
-
-            break;
-        }
-
-        uchar4 color4 = make_uchar4(color[0] * 255, color[1] * 255, color[2] * 255, 255);
-        surf2Dwrite(color4, surface, x * sizeof(uchar4), y);
-    }
-}
-void Scene::render(cudaSurfaceObject_t surface, Camera& camera, const ImVec2& windowSize) const {
+void Scene::render(cudaSurfaceObject_t surface, Camera& camera, curandState *rngStates, const ImVec2& windowSize, int spp) const {
 
 
     int devId = 0;
@@ -75,7 +28,7 @@ void Scene::render(cudaSurfaceObject_t surface, Camera& camera, const ImVec2& wi
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    render_kern<<<32 * numSMs, 256>>>(bvh, surface, camera,  windowSize[0], windowSize[1]);
+    render_kern<<<32 * numSMs, 256>>>(bvh, surface, camera, rngStates,windowSize[0], windowSize[1], spp);
 
     checkCudaErrors(cudaDeviceSynchronize());
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -229,12 +182,6 @@ Scene SceneBuilder::build() {
 
     scene.bvh = bvh;
 
-//    scene.triangles = trias;
-//    scene.triangleCount = triangles.size();
-
-//    if (cameraTf.has_value()) {
-//        throw std::runtime_error("Doesnt allow for camera in scene. Add to Viewport instead.");
-//    }
 
     if (windowSize.has_value()) {
         throw std::runtime_error("Doesnt allow for window size in scene. Add to Viewport instead.");
