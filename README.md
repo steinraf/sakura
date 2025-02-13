@@ -23,7 +23,7 @@ In order to create a 3D effect without use of glasses, the renderer can be used 
 rendering the scene from two slightly different perspectives. The following example shows a dragon model rendered in
 stereoscopic mode with moving cameras.
 
-![Stereoscopic video](https://github.com/steinraf/sakura/tree/dev/renders/demo_dragon_stereoscopic.mp4)
+![Stereoscopic video](renders/demo_dragon_stereoscopic.gif)
 
 In order to see the video in 3D, cross your eyes to overlap the images.
 
