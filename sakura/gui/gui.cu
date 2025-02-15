@@ -6,6 +6,8 @@
 #include <ranges>
 #include <utility>
 
+#include "../denoise/denoise.cuh"
+#include "../integrator/integrators.cuh"
 #include "gui.cuh"
 
 #include "imgui_impl_glfw.h"
@@ -15,6 +17,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <cuda_gl_interop.h>
+
 
 static constexpr int RNG_SEED = 42;
 
@@ -29,6 +32,62 @@ __global__ void initializeRNG(curandState *rngStates, size_t numSamples) {
     if(idx >= numSamples) return;
 
     curand_init(RNG_SEED, idx, 0, &rngStates[idx]);
+}
+
+__global__ void renderBuffer(const Statistic<Eigen::Vector3f> *stat, cudaSurfaceObject_t surface, int width, int height, auto f) {
+
+    size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(pixelIndex >= width * height) return;
+
+    size_t x = width - 1 - pixelIndex % width, y = pixelIndex / width;
+
+    auto color = f(stat[pixelIndex].getMean());
+
+    uchar4 color4 = make_uchar4(color[0] * 255,
+                                color[1] * 255,
+                                color[2] * 255, 255);
+
+
+    surf2Dwrite(color4, surface, x * sizeof(uchar4), y);
+}
+
+
+__global__ void clearFeatureBuffer(FeatureBuffer *buffer) {
+
+    auto idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(idx >= buffer->numElements) {
+        printf("Terminating early for idx %d\n", idx);
+        return;
+    }
+
+    buffer->color[idx] = {};
+    buffer->normal[idx] = {};
+    buffer->position[idx] = {};
+    buffer->albedo[idx] = {};
+}
+
+__host__ FeatureBuffer::FeatureBuffer(size_t numElements) : numElements(numElements), color(nullptr), normal(nullptr), position(nullptr), albedo(nullptr) {
+    checkCudaErrors(cudaMallocManaged(&color, numElements * sizeof(Statistic<Eigen::Vector3f>)));
+    checkCudaErrors(cudaMallocManaged(&normal, numElements * sizeof(Statistic<Eigen::Vector3f>)));
+    checkCudaErrors(cudaMallocManaged(&position, numElements * sizeof(Statistic<Eigen::Vector3f>)));
+    checkCudaErrors(cudaMallocManaged(&albedo, numElements * sizeof(Statistic<Eigen::Vector3f>)));
+    clear();
+}
+
+__host__ FeatureBuffer::~FeatureBuffer() {
+    checkCudaErrors(cudaFree(color));
+    checkCudaErrors(cudaFree(normal));
+    checkCudaErrors(cudaFree(position));
+    checkCudaErrors(cudaFree(albedo));
+}
+void FeatureBuffer::clear() {
+    int threadsPerBlock = 256;
+    size_t blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
+
+    clearFeatureBuffer<<<blocksPerGrid, threadsPerBlock>>>(this);
+    checkCudaErrors(cudaDeviceSynchronize());
 }
 
 
@@ -99,29 +158,49 @@ GUI::~GUI() {
     glfwTerminate();
 }
 
+struct Functor {
+    __device__ Eigen::Vector3f operator()(const Eigen::Vector3f &v) const {
+        auto tf = [] __device__(float f) {
+            return 0.5f * (1.0f + std::tanh(f));
+        };
+
+        return Eigen::Vector3f{
+                tf(v[0]),
+                tf(v[1]),
+                tf(v[2]),
+        };
+    }
+};
+
 void GUI::loop(const Scene &scene) {
 
     std::cout << "Initializing GUI loop\n";
 
     constexpr int MAX_SIZE = 4;// code breaks if viewports get constructed/destroyed
 
-    std::vector<OpenGLViewport> viewports;
+    std::vector<std::shared_ptr<Renderable>> viewports;
     viewports.reserve(MAX_SIZE);
 
     auto camTf = Eigen::Isometry3f::Identity();
     static constexpr float eyeWidth = 1.0;
 
-    constexpr int width = 512;
-    constexpr int height = 512;
+    constexpr int width = 1024;
+    constexpr int height = 1024;
 
     camTf.translate(Eigen::Vector3f{-eyeWidth / 2.0f, 5, -30});
-    viewports.emplace_back(width, height, "left eye", Camera{camTf, 35, 1.0f, 0.01, 30.0});
+    auto vp = std::make_shared<OpenGLViewport>(scene, width, height, "Raw Output", Camera{camTf, 35, 1.0f, 0.01, 30.0});
 
-    camTf.translate(Eigen::Vector3f{eyeWidth, 0, 0});
-    viewports.emplace_back(width, height, "right eye", Camera{camTf, 35, 1.0f, 0.01, 30.0});
+    viewports.push_back(std::make_shared<Denoiser>(vp->getFeatureBuffer(), width, height, "Denoised Output"));
+    viewports.push_back(vp);
+
+    viewports.push_back(std::make_shared<BufferVisualizer<Functor>>(vp->getFeatureBuffer()->normal, "Color Buffer", width, height, Functor{}));
+    viewports.push_back(std::make_shared<BufferVisualizer<Functor>>(vp->getFeatureBuffer()->position, "Position Buffer", width, height, Functor{}));
+
+    //    camTf.translate(Eigen::Vector3f{eyeWidth, 0, 0});
+    //    viewports.emplace_back(width, height, "right eye", Camera{camTf, 35, 1.0f, 0.01, 30.0});
 
 
-    assert(viewports.size() < MAX_SIZE && "Only 4 viewports supported");
+    assert(viewports.size() <= MAX_SIZE && "Only 4 viewports supported");
     std::cout << "Starting GUI loop\n";
 
     float t = 0.0;
@@ -169,31 +248,31 @@ void GUI::loop(const Scene &scene) {
 
 
                     if(viewports.size() == 1) {
-                        ImGui::DockBuilderDockWindow(viewports[0].getTitle().c_str(), a00);
+                        ImGui::DockBuilderDockWindow(viewports[0]->getTitle().c_str(), a00);
                         ImGui::DockBuilderFinish(dockspaceId);
                         return {s, a00};
                     } else if(viewports.size() == 2) {
                         ImGui::DockBuilderSplitNode(a00, ImGuiDir_Left, 0.5f, &a00, &a01);
-                        ImGui::DockBuilderDockWindow(viewports[0].getTitle().c_str(), a00);
-                        ImGui::DockBuilderDockWindow(viewports[1].getTitle().c_str(), a01);
+                        ImGui::DockBuilderDockWindow(viewports[0]->getTitle().c_str(), a00);
+                        ImGui::DockBuilderDockWindow(viewports[1]->getTitle().c_str(), a01);
                         ImGui::DockBuilderFinish(dockspaceId);
                         return {s, a00, a01};
                     } else if(viewports.size() == 3) {
                         ImGui::DockBuilderSplitNode(a00, ImGuiDir_Up, 0.5f, &a00, &a10);
                         ImGui::DockBuilderSplitNode(a00, ImGuiDir_Left, 0.5f, &a00, &a01);
-                        ImGui::DockBuilderDockWindow(viewports[0].getTitle().c_str(), a00);
-                        ImGui::DockBuilderDockWindow(viewports[1].getTitle().c_str(), a01);
-                        ImGui::DockBuilderDockWindow(viewports[2].getTitle().c_str(), a10);
+                        ImGui::DockBuilderDockWindow(viewports[0]->getTitle().c_str(), a00);
+                        ImGui::DockBuilderDockWindow(viewports[1]->getTitle().c_str(), a01);
+                        ImGui::DockBuilderDockWindow(viewports[2]->getTitle().c_str(), a10);
                         ImGui::DockBuilderFinish(dockspaceId);
                         return {s, a00, a01, a10};
                     } else if(viewports.size() == 4) {
                         ImGui::DockBuilderSplitNode(a00, ImGuiDir_Up, 0.5f, &a00, &a10);
                         ImGui::DockBuilderSplitNode(a00, ImGuiDir_Left, 0.5f, &a00, &a01);
                         ImGui::DockBuilderSplitNode(a10, ImGuiDir_Left, 0.5f, &a10, &a11);
-                        ImGui::DockBuilderDockWindow(viewports[0].getTitle().c_str(), a00);
-                        ImGui::DockBuilderDockWindow(viewports[1].getTitle().c_str(), a01);
-                        ImGui::DockBuilderDockWindow(viewports[2].getTitle().c_str(), a10);
-                        ImGui::DockBuilderDockWindow(viewports[3].getTitle().c_str(), a11);
+                        ImGui::DockBuilderDockWindow(viewports[0]->getTitle().c_str(), a00);
+                        ImGui::DockBuilderDockWindow(viewports[1]->getTitle().c_str(), a01);
+                        ImGui::DockBuilderDockWindow(viewports[2]->getTitle().c_str(), a10);
+                        ImGui::DockBuilderDockWindow(viewports[3]->getTitle().c_str(), a11);
                         ImGui::DockBuilderFinish(dockspaceId);
                         return {s, a00, a01, a10, a11};
                     } else {
@@ -207,10 +286,8 @@ void GUI::loop(const Scene &scene) {
             ImGui::End();
         }
 
-        for(auto &vp: viewports) {
-            vp.renderFrame(scene);
-            float circleScale = 1.0;
-            vp.translateCamera(dt * Eigen::Vector3f{circleScale * std::sin(t), 0.0, circleScale * std::cos(t)});
+        for(auto &_vp: viewports) {
+            _vp->renderFrame();
         }
 
 
@@ -219,10 +296,10 @@ void GUI::loop(const Scene &scene) {
 
             ImGui::Text("Scene Controls");
 
-            for(int i = 0; i < viewports.size(); ++i) {
-                ImGui::Text("Viewport %d", i);
+            for(size_t i = 0; i < viewports.size(); ++i) {
+                ImGui::Text("Viewport %s", viewports[i]->getTitle().c_str());
                 ImGui::PushID(i);
-                viewports[i].createSamplesPerPixelSlider(1, 16);
+                viewports[i]->generateSettings();
                 ImGui::PopID();
             }
 
@@ -262,13 +339,21 @@ Eigen::Vector2f GUI::getWindowSize() const {
     return {width, height};
 }
 
-OpenGLViewport::OpenGLViewport(int width, int height, std::string title, Camera camera, int spp)
-    : size({static_cast<float>(width), static_cast<float>(height)}), title(std::move(title)),
-      texture(0), resource(nullptr), surface(), camera(std::move(camera)), rngStates(nullptr), samplesPerPixel(spp) {
+OpenGLViewport::OpenGLViewport(const Scene &scene, int width, int height, std::string title, Camera camera, int spp)
+    : scene(scene), size({static_cast<float>(width), static_cast<float>(height)}), title(std::move(title)),
+      texture(0), resource(nullptr), featureBuffer(nullptr), surface(), camera(std::move(camera)), rngStates(nullptr), samplesPerPixel(spp) {
 
     checkCudaErrors(cudaMallocManaged(
             &rngStates,
             width * height * sizeof(curandState)));
+
+    checkCudaErrors(cudaMallocManaged(
+            &featureBuffer,
+            sizeof(FeatureBuffer)));
+
+    new(featureBuffer) FeatureBuffer(width * height);
+
+    //    *featureBuffer = FeatureBuffer(width * height);
 
     int threadsPerBlock = 256;// Optimal number of threads per block
     int blocksPerGrid = (width * height + threadsPerBlock - 1) / threadsPerBlock;
@@ -308,13 +393,20 @@ OpenGLViewport::OpenGLViewport(int width, int height, std::string title, Camera 
     checkCudaErrors(cudaCreateSurfaceObject(&surface, &resDesc));
 }
 
-void OpenGLViewport::renderFrame(const Scene &scene) {
+void OpenGLViewport::renderFrame() {
+
+    static float t = 0.0;
+    constexpr float dt = 0.01;
+    t += dt;
+    float circleScale = 1.0;
+    translateCamera(dt * Eigen::Vector3f{circleScale * std::sin(t), 0.0, circleScale * std::cos(t)});
+
 
     ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
                                                                         //    ImGui::SetWindowSize(size);
 
 
-    scene.render(surface, camera, rngStates, size, samplesPerPixel);
+    scene.render(surface, featureBuffer, camera, rngStates, size, samplesPerPixel);
 
 
     glClear(GL_COLOR_BUFFER_BIT);
@@ -336,20 +428,193 @@ void OpenGLViewport::renderFrame(const Scene &scene) {
 }
 void OpenGLViewport::translateCamera(const Eigen::Vector3f &translation) {
     camera.translate(translation);
+    featureBuffer->clear();
 }
-void OpenGLViewport::createSamplesPerPixelSlider(int min, int max) {
-    ImGui::SliderInt("Samples per Pixel", &samplesPerPixel, min, max);
+void OpenGLViewport::generateSettings() {
+    ImGui::SliderInt("Samples per Pixel", &samplesPerPixel, 1, 16);
 }
 OpenGLViewport::~OpenGLViewport() {
 
     checkCudaErrors(cudaDestroySurfaceObject(surface));
     checkCudaErrors(cudaGraphicsUnmapResources(1, &resource, nullptr));
 
-
     checkCudaErrors(cudaFree(rngStates));
+    checkCudaErrors(cudaFree(featureBuffer));
+
     checkCudaErrors(cudaGraphicsUnregisterResource(resource));
     glDeleteTextures(1, &texture);
 }
 std::string OpenGLViewport::getTitle() const {
     return title;
+}
+void OpenGLViewport::generateDebugInformation() {
+}
+Eigen::Vector2f OpenGLViewport::getWindowSize() const {
+    return Eigen::Vector2f{size[0], size[1]};
+}
+FeatureBuffer *OpenGLViewport::getFeatureBuffer() const {
+    return featureBuffer;
+}
+
+
+template<typename F>
+BufferVisualizer<F>::BufferVisualizer(Statistic<Eigen::Vector3f> *stat, std::string title, int width, int height, F f)
+    : stat(stat), size(width, height), title(std::move(title)), f(f) {
+
+
+    glGenTextures(1, &texture);
+
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, nullptr);
+
+
+    checkCudaErrors(cudaGraphicsGLRegisterImage(&resource, texture, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsNone));
+
+
+    //TODO map multiple resources at once to batch all viewports
+    checkCudaErrors(cudaGraphicsMapResources(1, &resource, nullptr));
+
+    cudaArray_t cudaArray;
+    checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&cudaArray, resource, 0, 0));
+
+    cudaResourceDesc resDesc = {};
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = cudaArray;
+
+
+    checkCudaErrors(cudaCreateSurfaceObject(&surface, &resDesc));
+}
+
+template<typename F>
+BufferVisualizer<F>::~BufferVisualizer() {
+    checkCudaErrors(cudaDestroySurfaceObject(surface));
+    checkCudaErrors(cudaGraphicsUnmapResources(1, &resource, nullptr));
+
+    checkCudaErrors(cudaGraphicsUnregisterResource(resource));
+    glDeleteTextures(1, &texture);
+}
+
+template<typename F>
+std::string BufferVisualizer<F>::getTitle() const {
+    return title;
+}
+
+template<typename F>
+void BufferVisualizer<F>::generateDebugInformation() {
+}
+template<typename F>
+void BufferVisualizer<F>::generateSettings() {
+}
+template<typename F>
+void BufferVisualizer<F>::renderFrame() {
+
+    ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
+                                                                        //    ImGui::SetWindowSize(size);
+
+    int threadsPerBlock = 256;// Optimal number of threads per block
+    int blocksPerGrid = (size[0] * size[1] + threadsPerBlock - 1) / threadsPerBlock;
+
+    renderBuffer<<<blocksPerGrid, threadsPerBlock>>>(stat, surface, size[0], size[1], f);
+    checkCudaErrors(cudaDeviceSynchronize());
+
+
+    glClear(GL_COLOR_BUFFER_BIT);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0, 0);
+    glVertex2f(-1, -1);
+    glTexCoord2f(1, 0);
+    glVertex2f(1, -1);
+    glTexCoord2f(1, 1);
+    glVertex2f(1, 1);
+    glTexCoord2f(0, 1);
+    glVertex2f(-1, 1);
+    glEnd();
+
+    ImGui::Image(texture, size);
+
+    ImGui::End();
+}
+
+
+Denoiser::Denoiser(FeatureBuffer *buffer, int width, int height, std::string title)
+    : buffer(buffer), size(width, height), title(std::move(title)), texture(0), resource(nullptr), surface() {
+
+    glGenTextures(1, &texture);
+
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, nullptr);
+
+
+    checkCudaErrors(cudaGraphicsGLRegisterImage(&resource, texture, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsNone));
+
+
+    //TODO map multiple resources at once to batch all viewports
+    checkCudaErrors(cudaGraphicsMapResources(1, &resource, nullptr));
+
+    cudaArray_t cudaArray;
+    checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&cudaArray, resource, 0, 0));
+
+    cudaResourceDesc resDesc = {};
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = cudaArray;
+
+
+    checkCudaErrors(cudaCreateSurfaceObject(&surface, &resDesc));
+}
+Denoiser::~Denoiser() {
+    checkCudaErrors(cudaDestroySurfaceObject(surface));
+    checkCudaErrors(cudaGraphicsUnmapResources(1, &resource, nullptr));
+
+    checkCudaErrors(cudaGraphicsUnregisterResource(resource));
+    glDeleteTextures(1, &texture);
+}
+std::string Denoiser::getTitle() const {
+    return title;
+}
+void Denoiser::generateDebugInformation() {
+}
+void Denoiser::generateSettings() {
+}
+void Denoiser::renderFrame() {
+
+    ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
+                                                                        //    ImGui::SetWindowSize(size);
+
+    int devId = 0;
+    int numSMs;
+    checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
+
+
+    denoise<<<32 * numSMs, 256>>>(surface, buffer, size[0], size[1]);
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    glClear(GL_COLOR_BUFFER_BIT);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0, 0);
+    glVertex2f(-1, -1);
+    glTexCoord2f(1, 0);
+    glVertex2f(1, -1);
+    glTexCoord2f(1, 1);
+    glVertex2f(1, 1);
+    glTexCoord2f(0, 1);
+    glVertex2f(-1, 1);
+    glEnd();
+
+    ImGui::Image(texture, size);
+
+    ImGui::End();
 }

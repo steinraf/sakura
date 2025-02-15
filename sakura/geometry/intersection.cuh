@@ -26,7 +26,7 @@ public:
 
     __device__ explicit Frame(const Eigen::Vector3f &nIn) noexcept
         : n(nIn.normalized()) {
-        if (abs(n[0]) > abs(n[1])) {
+        if(abs(n[0]) > abs(n[1])) {
             assert(sqrt(n[0] * n[0] + n[2] * n[2]) > 0);
             const float invLen = 1.0f / sqrt(n[0] * n[0] + n[2] * n[2]);
             t = Eigen::Vector3f(n[2] * invLen, 0.0f, -n[0] * invLen)

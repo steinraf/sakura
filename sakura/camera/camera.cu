@@ -38,7 +38,7 @@ __device__ Ray Camera::getRay(float u, float v, Sampler &sampler) const {
     Eigen::Vector3f nearP = Eigen::Vector3f{nearSample[0] / nearSample[3],
                                             nearSample[1] / nearSample[3],
                                             nearSample[2] / nearSample[3]};
-    
+
     auto diskSampleLens = sample::squareToUniformDisk(sampler.getSample2D());
 
     Eigen::Vector3f pLens =

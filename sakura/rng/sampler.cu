@@ -29,9 +29,9 @@ namespace sample {
             v[0] = 1.f - 2.f * sampler.getSample1D();
             v[1] = 1.f - 2.f * sampler.getSample1D();
             v[2] = 1.f - 2.f * sampler.getSample1D();
-        } while (v.squaredNorm() > 1.f);
+        } while(v.squaredNorm() > 1.f);
 
-        if (v.dot(pole) < 0.f) v = -v;
+        if(v.dot(pole) < 0.f) v = -v;
         v /= v.norm();
 
         return v;
@@ -70,4 +70,4 @@ namespace sample {
         return v[2] < 0 ? 0.f : v[2] * M_1_PIf;
     }
 
-}  // namespace sample
+}// namespace sample

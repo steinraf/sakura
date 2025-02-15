@@ -17,6 +17,10 @@ make
 
 or `make -j N` to make use of N threads
 
+The renderer launches a graphical interface that displays various elements of the scene.
+
+![Renderer GUI](renders/ui.png)
+
 ## Examples
 
 In order to create a 3D effect without use of glasses, the renderer can be used to create stereoscopic content by
@@ -26,6 +30,7 @@ stereoscopic mode with moving cameras.
 ![Stereoscopic video](renders/demo_dragon_stereoscopic.gif)
 
 In order to see the video in 3D, cross your eyes to overlap the images.
+
 
 [//]: # (## Example Images)
 

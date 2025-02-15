@@ -18,7 +18,7 @@ __host__ __device__ AABB::AABB(Eigen::Vector3f min,
                                Eigen::Vector3f max) noexcept
     : min{std::move(min)}, max{std::move(max)} {
 #ifndef NDEBUG
-    if (isFaulty()) {
+    if(isFaulty()) {
         printf("AABB IS EMPTY (%f %f %f %f %f %f)\n", min.x(), min.y(), min.z(),
                max.x(), max.y(), max.z());
         assert(!"EmptyAABB CONSTRUCTED");
@@ -37,7 +37,7 @@ __host__ __device__ AABB::AABB(const Eigen::Vector3f &p0,
           thrust::max(thrust::max(p0.y(), p1.y()), p2.y()),
           thrust::max(thrust::max(p0.z(), p1.z()), p2.z())} {
 #ifndef NDEBUG
-    if (isFaulty()) {
+    if(isFaulty()) {
         printf("AABB IS EMPTY (%f %f %f %f %f %f)\n", min.x(), min.y(), min.z(),
                max.x(), max.y(), max.z());
         assert(!"EmptyAABB CONSTRUCTED");
@@ -51,24 +51,24 @@ __host__ __device__ AABB::AABB(const Eigen::Vector3f &p0,
     float nearT = cuda::std::numeric_limits<float>::lowest();
     float farT = cuda::std::numeric_limits<float>::max();
 
-    for (int i = 0; i < 3; i++) {
+    for(int i = 0; i < 3; i++) {
         float origin = ray.origin[i];
         float minVal = min[i], maxVal = max[i];
 
-        if (ray.dir[i] == 0) {
-            if (origin < minVal || origin > maxVal) return false;
+        if(ray.dir[i] == 0) {
+            if(origin < minVal || origin > maxVal) return false;
         } else {
             float t1 = (minVal - origin) / ray.dir[i];
             float t2 = (maxVal - origin) / ray.dir[i];
 
-            if (t1 > t2) {
+            if(t1 > t2) {
                 cuda::std::swap(t1, t2);
             }
 
             nearT = thrust::max(t1, nearT);
             farT = thrust::min(t2, farT);
 
-            if (nearT > farT) return false;
+            if(nearT > farT) return false;
         }
     }
 
@@ -85,7 +85,7 @@ AABB::operator+(const AABB &other) const noexcept {
                                     thrust::max(max.y(), other.max.y()),
                                     thrust::max(max.z(), other.max.z())}};
 #ifndef NDEBUG
-    if (out.isFaulty()) {
+    if(out.isFaulty()) {
         printf(
                 "AABB IN THIS (%f %f %f %f %f %f) AND OTHER (%f %f %f %f %f "
                 "%f) -> RESULT (%f %f "
@@ -107,7 +107,7 @@ __host__ __device__ bool AABB::isFaulty() const noexcept {
     if(diff[0] < 0 || diff[1] < 0 || diff[2] < 0) return true;
 
     // If all components are less than epsilon, the AABB is faulty
-//    if(diff[0] <= EMPTY_EPSILON && diff[1] <= EMPTY_EPSILON && diff[2] <= EMPTY_EPSILON) return true;
+    //    if(diff[0] <= EMPTY_EPSILON && diff[1] <= EMPTY_EPSILON && diff[2] <= EMPTY_EPSILON) return true;
 
     return false;
 }

@@ -8,8 +8,8 @@
 
 __host__ __device__ Triangle::Triangle(
         Eigen::Vector3f p0, Eigen::Vector3f p1, Eigen::Vector3f p2,
-        const Eigen::Vector3f& n0, const Eigen::Vector3f& n1,
-        const Eigen::Vector3f& n2
+        const Eigen::Vector3f &n0, const Eigen::Vector3f &n1,
+        const Eigen::Vector3f &n2
         //             const Eigen::Vector2f& uv0, const Eigen::Vector2f&
         //             uv1, const Eigen::Vector2f& uv2
         ) noexcept
@@ -30,13 +30,13 @@ __device__ Triangle::Triangle() noexcept
       p2{0, 0, 1},
       n0{1, 0, 0},
       n1{0, 1, 0},
-      n2{0, 0, 1}  //          uv0{0.0, 0.0},
+      n2{0, 0, 1}//          uv0{0.0, 0.0},
                  //          uv1{1.0, 0.0},
                  //          uv2{0.0, 1.0}
 {}
 
 __host__ __device__ bool Triangle::intersectHandler(
-        const Ray& ray, Intersection& its) const noexcept {
+        const Ray &ray, Intersection &its) const noexcept {
     // Nori ray intersection code
 
     /* Find vectors for two edges sharing v[0] */
@@ -51,7 +51,7 @@ __host__ __device__ bool Triangle::intersectHandler(
     /* If determinant is near zero, ray lies in plane of triangle */
     const float det = edge1.dot(pvec);
 
-    if (det > -TRIANGLE_COLLISION_EPSILON && det < TRIANGLE_COLLISION_EPSILON) {
+    if(det > -TRIANGLE_COLLISION_EPSILON && det < TRIANGLE_COLLISION_EPSILON) {
         return false;
     }
 
@@ -62,7 +62,7 @@ __host__ __device__ bool Triangle::intersectHandler(
 
     /* Calculate U parameter and test bounds */
     const float u = tvec.dot(pvec) * inv_det;
-    if (u < 0.f || u > 1.f) {
+    if(u < 0.f || u > 1.f) {
         return false;
     }
 
@@ -71,13 +71,13 @@ __host__ __device__ bool Triangle::intersectHandler(
 
     /* Calculate V parameter and test bounds */
     const float v = ray.dir.dot(qvec) * inv_det;
-    if (v < 0.f || u + v > 1.f) {
+    if(v < 0.f || u + v > 1.f) {
         return false;
     }
 
     const float t = edge2.dot(qvec) * inv_det;
 
-    if (t >= ray.minDist && t <= ray.maxDist) {
+    if(t >= ray.minDist && t <= ray.maxDist) {
         its.uv = {u, v};
         its.t = t;
 
@@ -92,7 +92,7 @@ __host__ __device__ AABB Triangle::AABBGetter() const noexcept {
 }
 
 __host__ __device__ void Triangle::hitInformationSetter(
-        const Ray&, Intersection& its) const noexcept {
+        const Ray &, Intersection &its) const noexcept {
     float u = its.uv[0];
     float v = its.uv[1];
 

@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "aabb.cuh"
 #include "../geometry/triangle.cuh"
+#include "aabb.cuh"
 
 // Acceleration Node is a binary tree node for use in the BVH
 // Leaf Nodes:

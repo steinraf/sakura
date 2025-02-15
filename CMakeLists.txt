@@ -120,11 +120,10 @@ add_executable(${PROJECT_NAME}
         sakura/acceleration/aabb.cu
         sakura/acceleration/bvh.cu
         sakura/rng/sampler.cu
-        sakura/rng/sampler.cuh
         sakura/integrator/integrators.cu
-        sakura/integrator/integrators.cuh
         sakura/statistics/timing.cpp
-        sakura/statistics/timing.h
+        sakura/denoise/denoise.cu
+        sakura/denoise/denoise.cuh
 )
 
 

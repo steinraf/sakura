@@ -2,9 +2,10 @@
 // Created by steinraf on 05.02.25.
 //
 
+#include "../gui/gui.cuh"
 #include "integrators.cuh"
 
-__global__ void render_kern(BVH *bvh, cudaSurfaceObject_t surface,
+__global__ void render_kern(BVH *bvh, FeatureBuffer *buffer,
                             Camera camera, curandState *rngStates,
                             int width, int height, int spp) {
 
@@ -34,7 +35,7 @@ __global__ void render_kern(BVH *bvh, cudaSurfaceObject_t surface,
 
             auto cameraRay =
                     camera.getRay(float(x) / width, float(y) / height, sampler);
-            
+
             Intersection intersection;
             Ray currentRay = cameraRay;
             auto color = Eigen::Vector3f{0.0, 0.0, 0.0};
@@ -55,7 +56,16 @@ __global__ void render_kern(BVH *bvh, cudaSurfaceObject_t surface,
                     //                            0.2}.array();
                     //                    }
                     color.array() += t.array() * backgroundColor.array();
+                    if(numBounces == 0) {
+                        buffer->normal[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
+                        buffer->position[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
+                        //                        buffer->albedo[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
+                    }
                     break;
+                } else if(numBounces == 0) {
+                    buffer->normal[pixelIndex].addElement(intersection.normal);
+                    buffer->position[pixelIndex].addElement(intersection.point);
+                    //                    buffer->albedo[pixelIndex].addElement(intersection.material->albedo);
                 }
 
                 // Because we use roussian roulette we need to explicitly sample
@@ -113,27 +123,48 @@ __global__ void render_kern(BVH *bvh, cudaSurfaceObject_t surface,
                 ++numBounces;
             }
 
-            auto clamp = [] __device__(float x, float min, float max) {
-                return x < min ? min : (x > max ? max : x);
-            };
-
-            auto gammaCorrect = [&] __device__(float x) {
-                if(x <= 0.0031308f) return clamp(12.92f * x, 0.f, 1.f);
-                return clamp(1.055f * std::pow(x, 1.f / 2.4f) - 0.055f, 0.f,
-                             1.f);
-            };
-            for(int c = 0; c < 3; ++c) {
-                color[c] = gammaCorrect(color[c]);
-                assert(color[c] <= 1.0);
-            }
-
             totalColor += color;
         }
 
 
         totalColor /= float(spp);
 
-        uchar4 color4 = make_uchar4(totalColor[0] * 255, totalColor[1] * 255, totalColor[2] * 255, 255);
+
+        buffer->color[pixelIndex].addElement(totalColor);
+        //        printf("Accessed buffer %u\n", pixelIndex);
+
+        //        uchar4 color4 = make_uchar4(totalColor[0] * 255, totalColor[1] * 255, totalColor[2] * 255, 255);
+        //        surf2Dwrite(color4, surface, x * sizeof(uchar4), y);
+    }
+}
+
+__global__ void bufferToSurface(cudaSurfaceObject_t surface, FeatureBuffer *buffer, int width, int height) {
+    for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
+        pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
+        size_t x = width - 1 - pixelIndex % width, y = pixelIndex / width;
+
+        auto color = buffer->color[pixelIndex].getMean();
+
+        auto clamp = [] __device__(float x, float min, float max) {
+            return x < min ? min : (x > max ? max : x);
+        };
+
+        auto gammaCorrect = [&] __device__(float x) {
+            if(x <= 0.0031308f) return clamp(12.92f * x, 0.f, 1.f);
+            return clamp(1.055f * std::pow(x, 1.f / 2.4f) - 0.055f, 0.f,
+                         1.f);
+        };
+
+        for(int c = 0; c < 3; ++c) {
+            color[c] = gammaCorrect(color[c]);
+            assert(color[c] <= 1.0);
+        }
+
+        uchar4 color4 = make_uchar4(color[0] * 255,
+                                    color[1] * 255,
+                                    color[2] * 255, 255);
+
+
         surf2Dwrite(color4, surface, x * sizeof(uchar4), y);
     }
 }

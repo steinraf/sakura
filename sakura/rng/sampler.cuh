@@ -43,4 +43,4 @@ namespace sample {
     [[nodiscard]] __device__ float squareToCosineHemispherePdf(
             const Eigen::Vector3f &v) noexcept;
 
-}  // namespace sample
+}// namespace sample

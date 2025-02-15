@@ -19,11 +19,11 @@ public:
 
     // Takes in screen-space coordinates u, v and sampler
     // returns ray originating from the camera
-    __device__ Ray getRay(float u, float v, Sampler& sampler) const;
+    __device__ Ray getRay(float u, float v, Sampler &sampler) const;
 
     __host__ void createTranslationSlider();
 
-    __host__ __device__ void translate(const Eigen::Vector3f& x);
+    __host__ __device__ void translate(const Eigen::Vector3f &x);
 
 private:
     Eigen::Isometry3f cameraTransform;
@@ -37,13 +37,13 @@ private:
 class CameraBuilder {
 public:
     CameraBuilder() = default;
-    CameraBuilder& setTransform(Eigen::Isometry3f tf);
-    CameraBuilder& setFOV(float fov);
-    CameraBuilder& setAspectRatio(float aspectRatio);
-    CameraBuilder& setAperture(float aperture);
-    CameraBuilder& setFocusDist(float focusDist);
-    CameraBuilder& setNear(float near);
-    CameraBuilder& setFar(float far);
+    CameraBuilder &setTransform(Eigen::Isometry3f tf);
+    CameraBuilder &setFOV(float fov);
+    CameraBuilder &setAspectRatio(float aspectRatio);
+    CameraBuilder &setAperture(float aperture);
+    CameraBuilder &setFocusDist(float focusDist);
+    CameraBuilder &setNear(float near);
+    CameraBuilder &setFar(float far);
     Camera build();
 
 private:

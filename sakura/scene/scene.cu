@@ -6,19 +6,19 @@
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
 
-#include "scene.cuh"
 #include "../integrator/integrators.cuh"
+#include "scene.cuh"
 
 
-void checkCudaErrors(cudaError result){
-    if (result != cudaSuccess) {
+void checkCudaErrors(cudaError result) {
+    if(result != cudaSuccess) {
         fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result));
         exit(-1);
     }
 }
 
 
-void Scene::render(cudaSurfaceObject_t surface, Camera& camera, curandState *rngStates, const ImVec2& windowSize, int spp) const {
+void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &camera, curandState *rngStates, const ImVec2 &windowSize, int spp) const {
 
 
     int devId = 0;
@@ -26,20 +26,17 @@ void Scene::render(cudaSurfaceObject_t surface, Camera& camera, curandState *rng
     checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
 
 
-    auto start = std::chrono::high_resolution_clock::now();
-
-    render_kern<<<32 * numSMs, 256>>>(bvh, surface, camera, rngStates,windowSize[0], windowSize[1], spp);
-
+    render_kern<<<32 * numSMs, 256>>>(bvh, buffer, camera, rngStates, windowSize[0], windowSize[1], spp);
     checkCudaErrors(cudaDeviceSynchronize());
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::high_resolution_clock::now() - start);
+    bufferToSurface<<<32 * numSMs, 256>>>(surface, buffer, windowSize[0], windowSize[1]);
+    checkCudaErrors(cudaDeviceSynchronize());
 }
 
 
 SceneBuilder &SceneBuilder::addObj(
         const std::string &filename, Eigen::Transform<float, 3, Eigen::Affine> tf) {
     std::ifstream file(filename);
-    if (!file.is_open()) {
+    if(!file.is_open()) {
         throw std::runtime_error("Could not open file " + filename);
     }
 
@@ -50,32 +47,32 @@ SceneBuilder &SceneBuilder::addObj(
 
     std::string lineString{};
 
-    while (std::getline(file, lineString)) {
+    while(std::getline(file, lineString)) {
         std::istringstream line{lineString};
         std::string start;
 
         line >> start;
 
-        if (start == "v") {
+        if(start == "v") {
             Eigen::Vector3f vertex;
             line >> vertex.x() >> vertex.y() >> vertex.z();
             vertices.push_back(vertex);
-        } else if (start == "vn") {
+        } else if(start == "vn") {
             Eigen::Vector3f normal;
             line >> normal.x() >> normal.y() >> normal.z();
             normals.push_back(normal);
-        } else if (start == "f") {
+        } else if(start == "f") {
             std::array<Eigen::Vector3f, 3> faceVertices;
             std::array<Eigen::Vector3f, 3> faceNormals;
 
-            for (int i = 0; i < 3; i++) {
+            for(int i = 0; i < 3; i++) {
                 std::string vertex;
                 line >> vertex;
                 std::istringstream vertexStream{vertex};
                 std::string vertexIndex;
                 std::getline(vertexStream, vertexIndex, '/');
                 faceVertices[i] = vertices[std::stoi(vertexIndex) - 1];
-                faceVertices[i][2] *= -1; //TODO remove
+                faceVertices[i][2] *= -1;//TODO remove
                 std::string textureIndex;
                 std::getline(vertexStream, textureIndex, '/');
                 //                uvTextures[i] = uvs[std::stoi(textureIndex) -
@@ -86,14 +83,13 @@ SceneBuilder &SceneBuilder::addObj(
             }
 
 
-
             triangles.emplace_back(
                     tf * faceVertices[0], tf * faceVertices[1],
                     tf * faceVertices[2], tf.linear() * faceNormals[0],
                     tf.linear() * faceNormals[1], tf.linear() * faceNormals[2]);
         }
     }
-    for (const auto &t : triangles) {
+    for(const auto &t: triangles) {
         addTriangle(t);
     }
     return *this;
@@ -183,7 +179,7 @@ Scene SceneBuilder::build() {
     scene.bvh = bvh;
 
 
-    if (windowSize.has_value()) {
+    if(windowSize.has_value()) {
         throw std::runtime_error("Doesnt allow for window size in scene. Add to Viewport instead.");
     }
 
@@ -191,7 +187,7 @@ Scene SceneBuilder::build() {
 }
 
 __device__ __host__ constexpr uint32_t LeftShift3(uint32_t x) noexcept {
-    if (x == (1 << 10)) --x;
+    if(x == (1 << 10)) --x;
     x = (x | (x << 16)) & 0b00000011000000000000000011111111;
     x = (x | (x << 8)) & 0b00000011000000001111000000001111;
     x = (x | (x << 4)) & 0b00000011000011000011000011000011;
