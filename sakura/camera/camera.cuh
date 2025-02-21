@@ -4,10 +4,10 @@
 
 #pragma once
 
+#include "../common.cuh"
+#include "../geometry/ray.cuh"
 #include <Eigen/Dense>
 
-#include "../geometry/ray.cuh"
-#include "../rng/sampler.cuh"
 
 class Camera {
 public:
@@ -24,6 +24,7 @@ public:
     __host__ void createTranslationSlider();
 
     __host__ __device__ void translate(const Eigen::Vector3f &x);
+    __host__ __device__ void relativeTranslate(const Eigen::Vector3f &x);
 
 private:
     Eigen::Isometry3f cameraTransform;

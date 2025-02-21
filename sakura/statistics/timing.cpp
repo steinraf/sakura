@@ -3,6 +3,8 @@
 //
 
 #include "timing.h"
+#include "../scene/scene.cuh"
+
 Timer::Timer(VoidFunction auto &&func) {
     auto start = std::chrono::high_resolution_clock::now();
     func();

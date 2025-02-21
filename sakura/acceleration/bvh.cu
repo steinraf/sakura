@@ -4,6 +4,9 @@
 
 #include <utility>
 
+#include "../geometry/intersection.cuh"
+#include "../geometry/ray.cuh"
+#include "../geometry/triangle.cuh"
 #include "bvh.cuh"
 
 __device__ __host__ AccelerationNode::AccelerationNode() noexcept

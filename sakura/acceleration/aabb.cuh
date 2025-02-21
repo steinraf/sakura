@@ -9,7 +9,7 @@
 #include <Eigen/Dense>
 #include <cuda/std/limits>
 
-#include "../geometry/ray.cuh"
+#include "../common.cuh"
 
 // Axis Aligned Bounding Box
 struct AABB {

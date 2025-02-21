@@ -4,6 +4,9 @@
 
 #include <utility>
 
+#include "../acceleration/aabb.cuh"
+#include "../geometry/intersection.cuh"
+#include "../geometry/ray.cuh"
 #include "triangle.cuh"
 
 __host__ __device__ Triangle::Triangle(
@@ -92,7 +95,7 @@ __host__ __device__ AABB Triangle::AABBGetter() const noexcept {
 }
 
 __host__ __device__ void Triangle::hitInformationSetter(
-        const Ray &, Intersection &its) const noexcept {
+        const Ray &r, Intersection &its) const noexcept {
     float u = its.uv[0];
     float v = its.uv[1];
 
@@ -103,6 +106,11 @@ __host__ __device__ void Triangle::hitInformationSetter(
     its.uv = {u, v};
 
     its.normal = Eigen::Vector3f{bary[0] * n0 + bary[1] * n1 + bary[2] * n2};
+
+    //Flip normal if it is facing away from the ray
+    if(its.normal.dot(r.dir) > 0) {
+        its.normal = -its.normal;
+    }
 
     its.triangle = this;
 }

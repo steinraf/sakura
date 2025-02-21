@@ -31,6 +31,51 @@ stereoscopic mode with moving cameras.
 
 In order to see the video in 3D, cross your eyes to overlap the images.
 
+## Features
+
+- Materials
+    - [X] Diffuse
+    - [ ] Specular
+    - [ ] Transparent
+    - [ ] Emissive
+    - [ ] Textures
+    - [ ] Bump Mapping
+    - [ ] Normal Mapping
+- Cameras
+    - [ ] Distortion
+    - [X] Depth of Field
+    - [ ] Motion Blur
+    - [ ] Non-spherical aperture
+- Lights
+    - [ ] Point
+    - [ ] Directional
+    - [ ] Area
+    - [ ] Environment
+- Geometry
+    - [X] Triangle
+    - [ ] Sphere
+    - [ ] Plane
+    - [ ] Mesh
+    - [ ] Instancing
+- Acceleration
+    - [X] BVH
+        - [X] Geometry
+        - [ ] Lights
+        - [ ] BVH of BVHs
+    - [ ] Octree
+    - [ ] Tagged Pointers
+    - [ ] No Megakernels
+    - [ ] TLAS / BLAS
+- Denoising
+    - [ ] Bilateral Filter
+    - [ ] Non-Local Means
+    - [ ] Neural
+    - [ ] Temporal
+    - [ ] Adaptive Sampling
+- Sampling
+    - [ ] Random
+    - [ ] Adaptive
+    - [ ] low discrepancy
 
 [//]: # (## Example Images)
 

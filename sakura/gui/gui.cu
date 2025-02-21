@@ -3,11 +3,13 @@
 //
 
 #include <iostream>
+#include <memory>
 #include <ranges>
 #include <utility>
 
 #include "../denoise/denoise.cuh"
 #include "../integrator/integrators.cuh"
+#include "../scene/scene.cuh"
 #include "gui.cuh"
 
 #include "imgui_impl_glfw.h"
@@ -34,6 +36,7 @@ __global__ void initializeRNG(curandState *rngStates, size_t numSamples) {
     curand_init(RNG_SEED, idx, 0, &rngStates[idx]);
 }
 
+template<BUFFERTYPE B>
 __global__ void renderBuffer(const Statistic<Eigen::Vector3f> *stat, cudaSurfaceObject_t surface, int width, int height, auto f) {
 
     size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
@@ -42,7 +45,15 @@ __global__ void renderBuffer(const Statistic<Eigen::Vector3f> *stat, cudaSurface
 
     size_t x = width - 1 - pixelIndex % width, y = pixelIndex / width;
 
-    auto color = f(stat[pixelIndex].getMean());
+
+    auto color = [&]() -> Eigen::Vector3f {
+        if constexpr(B == BUFFERTYPE::MEAN) return f(stat[pixelIndex].getMean());
+        if constexpr(B == BUFFERTYPE::VARIANCE) return f(stat[pixelIndex].getVariance());
+        if constexpr(B == BUFFERTYPE::SAMPLEVARIANCE) return f(stat[pixelIndex].getSampleVariance());
+        if constexpr(B == BUFFERTYPE::NUM_ELEMENTS) return f(Eigen::Vector3f{stat[pixelIndex].getNumElements(), stat[pixelIndex].getNumElements(), stat[pixelIndex].getNumElements()});
+        else
+            return Eigen::Vector3f{-1, -1, -1};
+    }();
 
     uchar4 color4 = make_uchar4(color[0] * 255,
                                 color[1] * 255,
@@ -66,13 +77,15 @@ __global__ void clearFeatureBuffer(FeatureBuffer *buffer) {
     buffer->normal[idx] = {};
     buffer->position[idx] = {};
     buffer->albedo[idx] = {};
+    buffer->uv[idx] = {};
 }
 
-__host__ FeatureBuffer::FeatureBuffer(size_t numElements) : numElements(numElements), color(nullptr), normal(nullptr), position(nullptr), albedo(nullptr) {
+__host__ FeatureBuffer::FeatureBuffer(size_t numElements) : numElements(numElements), color(nullptr), normal(nullptr), position(nullptr), albedo(nullptr), uv(nullptr) {
     checkCudaErrors(cudaMallocManaged(&color, numElements * sizeof(Statistic<Eigen::Vector3f>)));
     checkCudaErrors(cudaMallocManaged(&normal, numElements * sizeof(Statistic<Eigen::Vector3f>)));
     checkCudaErrors(cudaMallocManaged(&position, numElements * sizeof(Statistic<Eigen::Vector3f>)));
     checkCudaErrors(cudaMallocManaged(&albedo, numElements * sizeof(Statistic<Eigen::Vector3f>)));
+    checkCudaErrors(cudaMallocManaged(&uv, numElements * sizeof(Statistic<Eigen::Vector3f>)));
     clear();
 }
 
@@ -81,6 +94,7 @@ __host__ FeatureBuffer::~FeatureBuffer() {
     checkCudaErrors(cudaFree(normal));
     checkCudaErrors(cudaFree(position));
     checkCudaErrors(cudaFree(albedo));
+    checkCudaErrors(cudaFree(uv));
 }
 void FeatureBuffer::clear() {
     int threadsPerBlock = 256;
@@ -172,6 +186,26 @@ struct Functor {
     }
 };
 
+struct FunctorPositive {
+    __device__ Eigen::Vector3f operator()(const Eigen::Vector3f &v) const {
+        auto tf = [] __device__(float f) {
+            return 0.5f * (1.0f + std::tanh(2.f * f - 1.f));
+        };
+
+        return Eigen::Vector3f{
+                tf(v[0]),
+                tf(v[1]),
+                tf(v[2]),
+        };
+    }
+};
+
+struct FunctorIdentity {
+    __device__ Eigen::Vector3f operator()(const Eigen::Vector3f &v) const {
+        return v;
+    }
+};
+
 void GUI::loop(const Scene &scene) {
 
     std::cout << "Initializing GUI loop\n";
@@ -187,14 +221,14 @@ void GUI::loop(const Scene &scene) {
     constexpr int width = 1024;
     constexpr int height = 1024;
 
-    camTf.translate(Eigen::Vector3f{-eyeWidth / 2.0f, 5, -30});
+    camTf.translate(Eigen::Vector3f{0, 0.919769, -5.41159});
     auto vp = std::make_shared<OpenGLViewport>(scene, width, height, "Raw Output", Camera{camTf, 35, 1.0f, 0.01, 30.0});
 
     viewports.push_back(std::make_shared<Denoiser>(vp->getFeatureBuffer(), width, height, "Denoised Output"));
     viewports.push_back(vp);
 
-    viewports.push_back(std::make_shared<BufferVisualizer<Functor>>(vp->getFeatureBuffer()->normal, "Color Buffer", width, height, Functor{}));
-    viewports.push_back(std::make_shared<BufferVisualizer<Functor>>(vp->getFeatureBuffer()->position, "Position Buffer", width, height, Functor{}));
+    viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
+    viewports.push_back(std::make_shared<BufferVisualizer<FunctorIdentity, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->uv, "UV Buffer", width, height, FunctorIdentity{}));
 
     //    camTf.translate(Eigen::Vector3f{eyeWidth, 0, 0});
     //    viewports.emplace_back(width, height, "right eye", Camera{camTf, 35, 1.0f, 0.01, 30.0});
@@ -296,12 +330,34 @@ void GUI::loop(const Scene &scene) {
 
             ImGui::Text("Scene Controls");
 
-            for(size_t i = 0; i < viewports.size(); ++i) {
-                ImGui::Text("Viewport %s", viewports[i]->getTitle().c_str());
-                ImGui::PushID(i);
-                viewports[i]->generateSettings();
-                ImGui::PopID();
+            if(ImGui::CollapsingHeader("Viewports", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::Indent(50);
+                for(size_t i = 0; i < viewports.size(); ++i) {
+                    ImGui::Indent(40);
+                    ImGui::PushID(i);
+                    if(ImGui::CollapsingHeader(viewports[i]->getTitle().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                        viewports[i]->generateSettings();
+                    }
+                    ImGui::PopID();
+                    ImGui::Unindent(40);
+                }
+                ImGui::Unindent(50);
             }
+
+            if(ImGui::CollapsingHeader("Debug Information")) {
+                ImGui::Indent(50);
+                for(size_t i = 0; i < viewports.size(); ++i) {
+                    ImGui::Indent(40);
+                    ImGui::PushID(i + viewports.size());
+                    if(ImGui::CollapsingHeader(viewports[i]->getTitle().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                        viewports[i]->generateDebugInformation();
+                    }
+                    ImGui::PopID();
+                    ImGui::Unindent(40);
+                }
+                ImGui::Unindent(50);
+            }
+
 
             ImGui::End();
         }
@@ -395,12 +451,12 @@ OpenGLViewport::OpenGLViewport(const Scene &scene, int width, int height, std::s
 
 void OpenGLViewport::renderFrame() {
 
-    static float t = 0.0;
-    constexpr float dt = 0.01;
-    t += dt;
-    float circleScale = 1.0;
-    translateCamera(dt * Eigen::Vector3f{circleScale * std::sin(t), 0.0, circleScale * std::cos(t)});
 
+    t += dt;
+    //    float circleScale = 1.0;
+    //    translateCamera(dt * Eigen::Vector3f{circleScale * std::sin(t), 0.0, circleScale * std::cos(t)});
+
+    handleUserInput();
 
     ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
                                                                         //    ImGui::SetWindowSize(size);
@@ -430,6 +486,12 @@ void OpenGLViewport::translateCamera(const Eigen::Vector3f &translation) {
     camera.translate(translation);
     featureBuffer->clear();
 }
+
+void OpenGLViewport::translateCameraRelative(const Eigen::Vector3f &translation) {
+    camera.relativeTranslate(translation);
+    featureBuffer->clear();
+}
+
 void OpenGLViewport::generateSettings() {
     ImGui::SliderInt("Samples per Pixel", &samplesPerPixel, 1, 16);
 }
@@ -455,10 +517,31 @@ Eigen::Vector2f OpenGLViewport::getWindowSize() const {
 FeatureBuffer *OpenGLViewport::getFeatureBuffer() const {
     return featureBuffer;
 }
+void OpenGLViewport::handleUserInput() {
+    constexpr float cameraVel = 10.0;
+    if(ImGui::IsKeyPressed(ImGuiKey_W)) {
+        translateCameraRelative(cameraVel * Eigen::Vector3f{0, 0, dt});
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_S)) {
+        translateCameraRelative(cameraVel * Eigen::Vector3f{0, 0, -dt});
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_Space)) {
+        translateCameraRelative(cameraVel * Eigen::Vector3f{0, dt, 0});
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_LeftShift)) {
+        translateCameraRelative(cameraVel * Eigen::Vector3f{0, -dt, 0});
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_D)) {
+        translateCameraRelative(cameraVel * Eigen::Vector3f{dt, 0, 0});
+    }
+    if(ImGui::IsKeyPressed(ImGuiKey_A)) {
+        translateCameraRelative(cameraVel * Eigen::Vector3f{-dt, 0, 0});
+    }
+}
 
 
-template<typename F>
-BufferVisualizer<F>::BufferVisualizer(Statistic<Eigen::Vector3f> *stat, std::string title, int width, int height, F f)
+template<typename F, BUFFERTYPE B>
+BufferVisualizer<F, B>::BufferVisualizer(Statistic<Eigen::Vector3f> *stat, std::string title, int width, int height, F f)
     : stat(stat), size(width, height), title(std::move(title)), f(f) {
 
 
@@ -491,8 +574,8 @@ BufferVisualizer<F>::BufferVisualizer(Statistic<Eigen::Vector3f> *stat, std::str
     checkCudaErrors(cudaCreateSurfaceObject(&surface, &resDesc));
 }
 
-template<typename F>
-BufferVisualizer<F>::~BufferVisualizer() {
+template<typename F, BUFFERTYPE B>
+BufferVisualizer<F, B>::~BufferVisualizer() {
     checkCudaErrors(cudaDestroySurfaceObject(surface));
     checkCudaErrors(cudaGraphicsUnmapResources(1, &resource, nullptr));
 
@@ -500,19 +583,19 @@ BufferVisualizer<F>::~BufferVisualizer() {
     glDeleteTextures(1, &texture);
 }
 
-template<typename F>
-std::string BufferVisualizer<F>::getTitle() const {
+template<typename F, BUFFERTYPE B>
+std::string BufferVisualizer<F, B>::getTitle() const {
     return title;
 }
 
-template<typename F>
-void BufferVisualizer<F>::generateDebugInformation() {
+template<typename F, BUFFERTYPE B>
+void BufferVisualizer<F, B>::generateDebugInformation() {
 }
-template<typename F>
-void BufferVisualizer<F>::generateSettings() {
+template<typename F, BUFFERTYPE B>
+void BufferVisualizer<F, B>::generateSettings() {
 }
-template<typename F>
-void BufferVisualizer<F>::renderFrame() {
+template<typename F, BUFFERTYPE B>
+void BufferVisualizer<F, B>::renderFrame() {
 
     ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
                                                                         //    ImGui::SetWindowSize(size);
@@ -520,7 +603,7 @@ void BufferVisualizer<F>::renderFrame() {
     int threadsPerBlock = 256;// Optimal number of threads per block
     int blocksPerGrid = (size[0] * size[1] + threadsPerBlock - 1) / threadsPerBlock;
 
-    renderBuffer<<<blocksPerGrid, threadsPerBlock>>>(stat, surface, size[0], size[1], f);
+    renderBuffer<B><<<blocksPerGrid, threadsPerBlock>>>(stat, surface, size[0], size[1], f);
     checkCudaErrors(cudaDeviceSynchronize());
 
 

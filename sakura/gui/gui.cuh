@@ -12,26 +12,48 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-#include "../scene/scene.cuh"
+#include "../camera/camera.cuh"
+#include "../common.cuh"
 
 
 template<typename T>
 class Statistic {
 public:
-    __host__ __device__ Statistic() : numElements(0), mean({}), variance({}) {}
+    __host__ __device__ Statistic() : numElements(0), mean(getZero()), variance(getZero()) {}
+    __host__ __device__ Statistic(const Statistic<T> &other) = default;
+    __host__ __device__ Statistic(Statistic<T> &&other) = default;
+    __host__ __device__ Statistic &operator=(const Statistic<T> &other) = default;
+    __host__ __device__ ~Statistic() = default;
+
+    //    __host__ __device__ Statistic<T> &operator=(const Statistic<T> &other) = delete;
 
     // Welford's online algorithm to incrementally calculate variance
-    __host__ __device__ void addElement(T element);
+    __host__ __device__ void addElement(T element) {
+        numElements++;
+        T delta = element - mean;
+        mean += delta / numElements;
+        if constexpr(std::is_same_v<T, Eigen::Vector3f>) {
+            variance += delta.cwiseProduct(element - mean);
+        } else {
+            variance += delta * (element - mean);
+        }
+    }
 
     [[nodiscard]] __host__ __device__ T getMean() const {
         return mean;
     }
 
     [[nodiscard]] __host__ __device__ T getVariance() const {
+        if(numElements == 0) {
+            return getZero();
+        }
         return variance / numElements;
     }
 
     [[nodiscard]] __host__ __device__ T getSampleVariance() const {
+        if(numElements <= 1) {
+            return getZero();
+        }
         return variance / (numElements - 1);
     }
 
@@ -41,28 +63,32 @@ public:
 
     __host__ __device__ void clear() {
         numElements = 0;
-        mean = {};
-        variance = {};
+        mean = getZero();
+        variance = getZero();
     }
 
 private:
+    __host__ __device__ T getZero() const {
+        if constexpr(std::is_same_v<T, Eigen::Vector3f>) {
+            return Eigen::Vector3f::Zero();
+        } else {
+            return T();
+        }
+    }
+
     size_t numElements;
     T mean;
     T variance;
 };
 
-template<typename T>
-__host__ __device__ void Statistic<T>::addElement(T element) {
-    numElements++;
-    T delta = element - mean;
-    mean += delta / numElements;
-    if constexpr(std::is_same_v<T, Eigen::Vector3f>) {
-        variance += delta.cwiseProduct(element - mean);
-    } else {
-        variance += delta * (element - mean);
-    }
-}
+enum class BUFFERTYPE {
+    MEAN,
+    VARIANCE,
+    SAMPLEVARIANCE,
+    NUM_ELEMENTS
+};
 
+template<BUFFERTYPE B>
 __global__ void renderBuffer(const Statistic<Eigen::Vector3f> *stat, cudaSurfaceObject_t surface, int width, int height, auto /* Vector Transformation */ f);
 
 __global__ void clearFeatureBuffer(FeatureBuffer *buffer);
@@ -79,6 +105,7 @@ struct FeatureBuffer {
     Statistic<Eigen::Vector3f> *normal;
     Statistic<Eigen::Vector3f> *position;
     Statistic<Eigen::Vector3f> *albedo;
+    Statistic<Eigen::Vector3f> *uv;
 };
 
 class Renderable {
@@ -101,6 +128,9 @@ public:
 
     void renderFrame() override;
     void translateCamera(const Eigen::Vector3f &translation);
+    // (Right | Up | Forward )
+    void translateCameraRelative(const Eigen::Vector3f &translation);
+    void handleUserInput();
 
     void generateSettings() override;
     void generateDebugInformation() override;
@@ -122,10 +152,13 @@ private:
     Camera camera;
     curandState *rngStates;
     int samplesPerPixel;
+
+    float t = 0.0;
+    const float dt = 0.01;
 };
 
 
-template<typename F>
+template<typename F, BUFFERTYPE B>
 class BufferVisualizer : public Renderable {
 public:
     BufferVisualizer(Statistic<Eigen::Vector3f> *stat, std::string title, int width, int height, F f);

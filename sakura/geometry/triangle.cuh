@@ -4,8 +4,9 @@
 
 #pragma once
 
-#include "../acceleration/aabb.cuh"
-#include "intersection.cuh"
+#include <Eigen/Dense>
+
+#include "../common.cuh"
 
 static const float TRIANGLE_COLLISION_EPSILON = 0.0001f;
 

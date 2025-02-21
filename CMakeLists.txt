@@ -124,6 +124,8 @@ add_executable(${PROJECT_NAME}
         sakura/statistics/timing.cpp
         sakura/denoise/denoise.cu
         sakura/denoise/denoise.cuh
+        sakura/common.cuh
+        sakura/common.cu
 )
 
 

@@ -11,7 +11,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#include "../scene/scene.cuh"
+#include "../common.cuh"
 
 template<typename F>
 concept VoidFunction = requires(F f) {

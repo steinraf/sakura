@@ -2,11 +2,12 @@
 // Created by steinraf on 04.02.25.
 //
 
-
 #include <utility>
 
 #include "imgui.h"
 
+#include "../geometry/ray.cuh"
+#include "../rng/sampler.cuh"
 #include "camera.cuh"
 
 
@@ -58,6 +59,9 @@ __host__ void Camera::createTranslationSlider() {
 }
 __host__ __device__ void Camera::translate(const Eigen::Vector3f &x) {
     cameraTransform.translate(x);
+}
+__host__ __device__ void Camera::relativeTranslate(const Eigen::Vector3f &x) {
+    cameraTransform.translation() += cameraTransform.linear() * x;
 }
 
 CameraBuilder &CameraBuilder::setTransform(Eigen::Isometry3f tf) {
