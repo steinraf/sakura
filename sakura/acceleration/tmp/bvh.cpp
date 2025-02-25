@@ -7,7 +7,7 @@
 #include "../geometry/intersection.cuh"
 #include "../geometry/ray.cuh"
 #include "../geometry/triangle.cuh"
-#include "bvh.cuh"
+#include "bvh.h"
 
 
 __device__ __host__ AccelerationNode::AccelerationNode() noexcept

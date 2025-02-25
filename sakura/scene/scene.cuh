@@ -22,7 +22,7 @@
 class Scene {
 
 public:
-    void render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &camera, curandState *rngStates, const ImVec2 &windowSize, int spp) const;
+    void render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &camera, curandState *rngStates, const Eigen::Vector2<unsigned int> &windowSize, int spp) const;
 
 private:
     friend class SceneBuilder;
@@ -34,18 +34,17 @@ class SceneLogger;
 
 struct ScopedLogger {
 public:
-    // Constructor prints <tagName attribute>
+    // Constructor prints <name attribute>
     //                    \t[...]
-    // Destructor prints  </tagName>
-
-    [[nodiscard]] ScopedLogger getNewSection(std::string tagName, std::string attribute = "");
+    // Destructor prints  </name>
+    [[nodiscard]] ScopedLogger getNewSection(std::string name, const std::string &attribute = "");
 
     // Automatically indents and ends the line
     // If isError, the message is printed in orange
     template<bool isError>
     void log(const std::string &msg) const;
 
-    explicit ScopedLogger(SceneLogger &formatter, std::string tagName, std::string attribute);
+    explicit ScopedLogger(SceneLogger &formatter, std::string tagName, const std::string &attribute);
     ScopedLogger() = delete;
     ScopedLogger &operator=(const ScopedLogger &) = delete;
     ScopedLogger(const ScopedLogger &) = delete;
@@ -55,12 +54,12 @@ public:
 
 private:
     class SceneLogger &formatter;
-    std::string tagName;
+    std::string tagName; /* Name of the tag */
 };
 
 class SceneLogger {
 public:
-    [[nodiscard]] ScopedLogger getNewSection(std::string tagName, std::string attribute = "");
+    [[nodiscard]] ScopedLogger getNewSection(std::string tagName, const std::string &attribute = "");
 
 private:
     void indent() { ++indentLevel; }
@@ -98,7 +97,7 @@ private:
 
     // Prepare the XML file for parsing
     // returns document and document root
-    [[nodiscard]] std::pair<pugi::xml_document, pugi::xml_node> loadXML(const std::string &filename) const noexcept(false);
+    [[nodiscard]] static std::pair<pugi::xml_document, pugi::xml_node> loadXML(const std::string &filename) noexcept(false);
 
     [[nodiscard]] std::string lookupName(const std::string &name) const;
     std::unordered_map<std::string, std::string> nameMap;

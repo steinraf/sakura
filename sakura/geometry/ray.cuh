@@ -15,6 +15,8 @@ struct Ray {
 
     [[nodiscard]] __host__ __device__ Eigen::Vector3f at(float t) const noexcept;
 
+    __host__ __device__ void transform(const Eigen::Matrix4f &transform) noexcept;
+
     Eigen::Vector3f origin;
     Eigen::Vector3f dir;
     float minDist, maxDist;

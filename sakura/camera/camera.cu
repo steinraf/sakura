@@ -64,38 +64,38 @@ __host__ __device__ void Camera::relativeTranslate(const Eigen::Vector3f &x) {
     cameraTransform.translation() += cameraTransform.linear() * x;
 }
 
-CameraBuilder &CameraBuilder::setTransform(Eigen::Isometry3f tf) {
-    this->tf = std::move(tf);
+CameraBuilder &CameraBuilder::setTransform(Eigen::Isometry3f transform) {
+    this->tf = std::move(transform);
     return *this;
 }
 
-CameraBuilder &CameraBuilder::setFOV(float fov) {
-    this->fov = fov;
+CameraBuilder &CameraBuilder::setFOV(float fieldOfView) {
+    this->fov = fieldOfView;
     return *this;
 }
 
-CameraBuilder &CameraBuilder::setAspectRatio(float aspectRatio) {
-    this->aspectRatio = aspectRatio;
+CameraBuilder &CameraBuilder::setAspectRatio(float ratio) {
+    this->aspectRatio = ratio;
     return *this;
 }
 
-CameraBuilder &CameraBuilder::setAperture(float aperture) {
-    this->aperture = aperture;
+CameraBuilder &CameraBuilder::setAperture(float apertureSize) {
+    this->aperture = apertureSize;
     return *this;
 }
 
-CameraBuilder &CameraBuilder::setFocusDist(float focusDist) {
-    this->focusDist = focusDist;
+CameraBuilder &CameraBuilder::setFocusDist(float dist) {
+    this->focusDist = dist;
     return *this;
 }
 
-CameraBuilder &CameraBuilder::setNear(float near) {
-    this->near = near;
+CameraBuilder &CameraBuilder::setNear(float nearDistance) {
+    this->near = nearDistance;
     return *this;
 }
 
-CameraBuilder &CameraBuilder::setFar(float far) {
-    this->far = far;
+CameraBuilder &CameraBuilder::setFar(float farDistance) {
+    this->far = farDistance;
     return *this;
 }
 

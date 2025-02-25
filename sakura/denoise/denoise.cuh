@@ -6,4 +6,4 @@
 
 #include "../common.cuh"
 
-__global__ void denoise(cudaSurfaceObject_t surface, const FeatureBuffer *buffer, int width, int height);
+__global__ void denoise(cudaSurfaceObject_t surface, const FeatureBuffer *buffer, unsigned int width, unsigned int height);

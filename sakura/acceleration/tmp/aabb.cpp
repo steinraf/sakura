@@ -5,7 +5,7 @@
 #include <utility>
 
 #include "../geometry/ray.cuh"
-#include "aabb.cuh"
+#include "aabb.h"
 
 __host__ __device__ AABB::AABB() noexcept
     : min{cuda::std::numeric_limits<float>::max(),

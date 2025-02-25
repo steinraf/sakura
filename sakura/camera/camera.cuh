@@ -38,13 +38,13 @@ private:
 class CameraBuilder {
 public:
     CameraBuilder() = default;
-    CameraBuilder &setTransform(Eigen::Isometry3f tf);
-    CameraBuilder &setFOV(float fov);
-    CameraBuilder &setAspectRatio(float aspectRatio);
-    CameraBuilder &setAperture(float aperture);
-    CameraBuilder &setFocusDist(float focusDist);
-    CameraBuilder &setNear(float near);
-    CameraBuilder &setFar(float far);
+    CameraBuilder &setTransform(Eigen::Isometry3f transform);
+    CameraBuilder &setFOV(float fieldOfView);
+    CameraBuilder &setAspectRatio(float ratio);
+    CameraBuilder &setAperture(float apertureSize);
+    CameraBuilder &setFocusDist(float dist);
+    CameraBuilder &setNear(float nearDistance);
+    CameraBuilder &setFar(float farDistance);
     Camera build();
 
 private:

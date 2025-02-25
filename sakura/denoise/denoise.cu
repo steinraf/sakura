@@ -2,59 +2,54 @@
 // Created by steinraf on 15.02.25.
 //
 
-#include "../gui/gui.cuh"
 #include "../integrator/integrators.cuh"
 #include "denoise.cuh"
 
-#include <Eigen/Dense>
+#include "../gui/viewport.cuh"
 
-__global__ void denoiseOld(cudaSurfaceObject_t surface, const FeatureBuffer *buffer, int width, int height) {
+__global__ void denoise(cudaSurfaceObject_t surface, const FeatureBuffer *buffer, unsigned int width, unsigned int height) {
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
         pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
-        int x = width - 1 - pixelIndex % width, y = pixelIndex / width;
+        unsigned int x = width - 1 - pixelIndex % width, y = pixelIndex / width;
 
-        constexpr int MAX_RADIUS = 8;
+        constexpr int MAX_RADIUS = 32;
 
-        Eigen::Vector3f localAverageColor{0, 0, 0};
-        int avgCount = 0;
-        for(int dx = -MAX_RADIUS; dx < MAX_RADIUS + 1; ++dx) {
-            for(int dy = -MAX_RADIUS; dy < MAX_RADIUS + 1; ++dy) {
+        // Simply apply gaussian blur
 
-                if(x + dx < 0 || x + dx >= width || y + dy < 0 || y + dy >= height) continue;
-                localAverageColor += buffer->color[(y + dy) * width + (width - 1 - (x + dx))].getMean();
-                ++avgCount;
+        Eigen::Vector3f color = Eigen::Vector3f::Zero();
+        float weight = 0.0f;
+
+        for(int dx = -MAX_RADIUS; dx <= MAX_RADIUS; ++dx) {
+            for(int dy = -MAX_RADIUS; dy <= MAX_RADIUS; ++dy) {
+                int nx = safe_uint_to_int(x) + dx, ny = safe_uint_to_int(y) + dy;
+                if(nx < 0 || nx >= width || ny < 0 || ny >= height) {
+                    continue;
+                }
+
+                Eigen::Vector3f currentColor = buffer->color[width - 1 - nx + ny * width].getMean();
+
+                const float distanceSq = Eigen::Vector2f{dx, dy}.squaredNorm();
+                const float gaussian = std::exp(-distanceSq / (2 * 2));
+
+                color += currentColor * gaussian;
+                weight += gaussian;
             }
         }
-        localAverageColor /= avgCount;
 
-        Eigen::Vector3f totalColor = (0.4f * buffer->color[pixelIndex].getMean() + 0.6f * localAverageColor);
+        Eigen::Vector3f localAverageColor = color / weight;
+
+        Eigen::Vector3f totalColor = (localAverageColor);
 
         totalColor = tonemap(totalColor);
 
-        uchar4 color4 = make_uchar4(totalColor[0] * 255, totalColor[1] * 255, totalColor[2] * 255, 255);
-        surf2Dwrite(color4, surface, x * sizeof(uchar4), y);
-    }
-}
+        auto toChar = [](float x) {
+            return static_cast<unsigned char>(std::clamp(x * 255.f, 0.f, 255.f));
+        };
 
-// Bilateral filter
-
-__device__ Eigen::Vector3f bilateralFilter(const FeatureBuffer *buffer, int width, int height, int x, int y) {
-
-
-    return Eigen::Vector3f{0, 0, 0};
-}
-
-__global__ void denoise(cudaSurfaceObject_t surface, const FeatureBuffer *buffer, int width, int height) {
-
-    for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
-        pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
-        int x = width - 1 - pixelIndex % width, y = pixelIndex / width;
-
-        Eigen::Vector3f color = bilateralFilter(buffer, width, height, width - 1 - x, y);
-
-        color = tonemap(color);
-
-        uchar4 color4 = make_uchar4(color[0] * 255, color[1] * 255, color[2] * 255, 255);
+        uchar4 color4 = make_uchar4(toChar(totalColor[0]),
+                                    toChar(totalColor[1]),
+                                    toChar(totalColor[2]),
+                                    255);
         surf2Dwrite(color4, surface, x * sizeof(uchar4), y);
     }
 }

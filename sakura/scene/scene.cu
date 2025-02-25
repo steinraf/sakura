@@ -6,6 +6,8 @@
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
 
+#include <utility>
+
 #include "../acceleration/aabb.cuh"
 #include "../acceleration/bvh.cuh"
 #include "../camera/camera.cuh"
@@ -16,14 +18,13 @@
 #include "pugixml.hpp"
 
 
-void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &camera, curandState *rngStates, const ImVec2 &windowSize, int spp) const {
+void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &camera, curandState *rngStates, const Eigen::Vector2<unsigned int> &windowSize, int spp) const {
 
 
     int devId = 0;
     int numSMs;
     checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
-
-
+    
     render_kern<<<32 * numSMs, 256>>>(bvh, buffer, camera, rngStates, windowSize[0], windowSize[1], spp);
     checkCudaErrors(cudaDeviceSynchronize());
     bufferToSurface<<<32 * numSMs, 256>>>(surface, buffer, windowSize[0], windowSize[1]);
@@ -41,7 +42,7 @@ SceneBuilder &SceneBuilder::addObj(
     std::vector<Eigen::Vector3f> vertices{};
     std::vector<Eigen::Vector3f> normals{};
 
-    std::vector<Triangle> triangles{};
+    std::vector<Triangle> trias{};
 
     std::string lineString{};
 
@@ -81,13 +82,13 @@ SceneBuilder &SceneBuilder::addObj(
             }
 
 
-            triangles.emplace_back(
+            trias.emplace_back(
                     tf * faceVertices[0], tf * faceVertices[1],
                     tf * faceVertices[2], tf.linear() * faceNormals[0],
                     tf.linear() * faceNormals[1], tf.linear() * faceNormals[2]);
         }
     }
-    for(const auto &t: triangles) {
+    for(const auto &t: trias) {
         addTriangle(t);
     }
     return *this;
@@ -104,7 +105,7 @@ SceneBuilder &SceneBuilder::parseXML(
 
     auto [doc, root] = loadXML(filename);
 
-    const auto &rootLogger = sceneLogger.getNewSection("scene");
+    [[maybe_unused]] const auto &rootLogger = sceneLogger.getNewSection("scene");
 
 #define CREATE_PARSER(name) {#name, [&](const pugi::xml_node &node, const auto &logger) { parse_##name(node, logger); }}
 
@@ -135,7 +136,7 @@ SceneBuilder &SceneBuilder::parseXML(
     return *this;
 }
 
-std::pair<pugi::xml_document, pugi::xml_node> SceneBuilder::loadXML(const std::string &filename) const noexcept(false) {
+std::pair<pugi::xml_document, pugi::xml_node> SceneBuilder::loadXML(const std::string &filename) noexcept(false) {
     pugi::xml_document doc;
     pugi::xml_parse_result result = doc.load_file(filename.c_str());
 
@@ -267,7 +268,7 @@ Scene SceneBuilder::build() {
 
     std::cout << "Built BVH in " << duration.count() << "ms\n";
 
-    *bvh = BVH{bvhNodes, triangles.size()};
+    *bvh = BVH{bvhNodes};
 
     scene.bvh = bvh;
 
@@ -298,12 +299,12 @@ ScopedLogger::~ScopedLogger() {
     formatter.dedent();
     log<false>("</" + tagName + ">");
 }
-ScopedLogger::ScopedLogger(SceneLogger &formatter, std::string tagName, std::string attribute) : formatter(formatter), tagName(std::move(tagName)) {
-    log<false>('<' + this->tagName + (attribute == "" ? "" : " ") + attribute + '>');
+ScopedLogger::ScopedLogger(SceneLogger &formatter, std::string tagName, const std::string &attribute) : formatter(formatter), tagName(std::move(tagName)) {
+    log<false>('<' + this->tagName + (attribute.empty() ? "" : " ") + attribute + '>');
     formatter.indent();
 }
-ScopedLogger ScopedLogger::getNewSection(std::string tagName, std::string attribute) {
-    return formatter.getNewSection(tagName, attribute);
+ScopedLogger ScopedLogger::getNewSection(std::string name, const std::string &attribute) {
+    return formatter.getNewSection(std::move(name), attribute);
 }
 
 template<bool isError>
@@ -328,6 +329,6 @@ void ScopedLogger::log(const std::string &msg) const {
     } while(pos != std::string::npos);
 }
 
-ScopedLogger SceneLogger::getNewSection(std::string tagName, std::string attribute) {
-    return ScopedLogger{*this, tagName, attribute};
+ScopedLogger SceneLogger::getNewSection(std::string tagName, const std::string &attribute) {
+    return ScopedLogger{*this, std::move(tagName), attribute};
 }

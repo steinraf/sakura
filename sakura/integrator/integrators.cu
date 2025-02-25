@@ -5,16 +5,16 @@
 #include "../acceleration/bvh.cuh"
 #include "../camera/camera.cuh"
 #include "../geometry/intersection.cuh"
-#include "../gui/gui.cuh"
+#include "../gui/viewport.cuh"
 #include "../rng/sampler.cuh"
 #include "integrators.cuh"
 
 __global__ void render_kern(BVH *bvh, FeatureBuffer *buffer,
                             Camera camera, curandState *rngStates,
-                            int width, int height, int spp) {
+                            unsigned int width, unsigned int height, int spp) {
 
 
-    constexpr int maxBounces = 1;
+    constexpr int maxBounces = 5;
 
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
         pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
@@ -35,7 +35,8 @@ __global__ void render_kern(BVH *bvh, FeatureBuffer *buffer,
         for(int sample = 0; sample < spp; ++sample) {
 
             auto cameraRay =
-                    camera.getRay(float(x) / width, float(y) / height, sampler);
+                    camera.getRay(float(x) / float(width), float(y) / float(height), sampler);
+
 
             Intersection intersection;
             Ray currentRay = cameraRay;
@@ -45,7 +46,6 @@ __global__ void render_kern(BVH *bvh, FeatureBuffer *buffer,
                                  // indices of refraction
 
             int numBounces = 0;
-
 
             while(true) {
                 if(!bvh->intersect(currentRay, intersection)) {
@@ -95,16 +95,21 @@ __global__ void render_kern(BVH *bvh, FeatureBuffer *buffer,
     }
 }
 
-__global__ void bufferToSurface(cudaSurfaceObject_t surface, FeatureBuffer *buffer, int width, int height) {
+__global__ void bufferToSurface(cudaSurfaceObject_t surface, FeatureBuffer *buffer, unsigned int width, unsigned int height) {
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
         pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
         size_t x = width - 1 - pixelIndex % width, y = pixelIndex / width;
 
         auto color = tonemap(buffer->color[pixelIndex].getMean());
 
-        uchar4 color4 = make_uchar4(color[0] * 255,
-                                    color[1] * 255,
-                                    color[2] * 255, 255);
+        auto toChar = [](float x) {
+            return static_cast<unsigned char>(std::clamp(x * 255.f, 0.f, 255.f));
+        };
+
+        uchar4 color4 = make_uchar4(toChar(color[0]),
+                                    toChar(color[1]),
+                                    toChar(color[2]),
+                                    255);
 
 
         surf2Dwrite(color4, surface, x * sizeof(uchar4), y);

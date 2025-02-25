@@ -5,10 +5,8 @@
 #include <iostream>
 #include <memory>
 #include <ranges>
-#include <utility>
 
 #include "../denoise/denoise.cuh"
-#include "../integrator/integrators.cuh"
 #include "../scene/scene.cuh"
 #include "gui.cuh"
 
@@ -20,88 +18,11 @@
 #include <GLFW/glfw3.h>
 #include <cuda_gl_interop.h>
 
-
-static constexpr int RNG_SEED = 42;
+#include "viewport.cuh"
 
 
 static void glfw_error_callback(int error, const char *description) {
     fprintf(stderr, "Glfw Error %d: %s\n", error, description);
-}
-
-__global__ void initializeRNG(curandState *rngStates, size_t numSamples) {
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(idx >= numSamples) return;
-
-    curand_init(RNG_SEED, idx, 0, &rngStates[idx]);
-}
-
-template<BUFFERTYPE B>
-__global__ void renderBuffer(const Statistic<Eigen::Vector3f> *stat, cudaSurfaceObject_t surface, int width, int height, auto f) {
-
-    size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(pixelIndex >= width * height) return;
-
-    size_t x = width - 1 - pixelIndex % width, y = pixelIndex / width;
-
-
-    auto color = [&]() -> Eigen::Vector3f {
-        if constexpr(B == BUFFERTYPE::MEAN) return f(stat[pixelIndex].getMean());
-        if constexpr(B == BUFFERTYPE::VARIANCE) return f(stat[pixelIndex].getVariance());
-        if constexpr(B == BUFFERTYPE::SAMPLEVARIANCE) return f(stat[pixelIndex].getSampleVariance());
-        if constexpr(B == BUFFERTYPE::NUM_ELEMENTS) return f(Eigen::Vector3f{stat[pixelIndex].getNumElements(), stat[pixelIndex].getNumElements(), stat[pixelIndex].getNumElements()});
-        else
-            return Eigen::Vector3f{-1, -1, -1};
-    }();
-
-    uchar4 color4 = make_uchar4(color[0] * 255,
-                                color[1] * 255,
-                                color[2] * 255, 255);
-
-
-    surf2Dwrite(color4, surface, x * sizeof(uchar4), y);
-}
-
-
-__global__ void clearFeatureBuffer(FeatureBuffer *buffer) {
-
-    auto idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if(idx >= buffer->numElements) {
-        printf("Terminating early for idx %d\n", idx);
-        return;
-    }
-
-    buffer->color[idx] = {};
-    buffer->normal[idx] = {};
-    buffer->position[idx] = {};
-    buffer->albedo[idx] = {};
-    buffer->uv[idx] = {};
-}
-
-__host__ FeatureBuffer::FeatureBuffer(size_t numElements) : numElements(numElements), color(nullptr), normal(nullptr), position(nullptr), albedo(nullptr), uv(nullptr) {
-    checkCudaErrors(cudaMallocManaged(&color, numElements * sizeof(Statistic<Eigen::Vector3f>)));
-    checkCudaErrors(cudaMallocManaged(&normal, numElements * sizeof(Statistic<Eigen::Vector3f>)));
-    checkCudaErrors(cudaMallocManaged(&position, numElements * sizeof(Statistic<Eigen::Vector3f>)));
-    checkCudaErrors(cudaMallocManaged(&albedo, numElements * sizeof(Statistic<Eigen::Vector3f>)));
-    checkCudaErrors(cudaMallocManaged(&uv, numElements * sizeof(Statistic<Eigen::Vector3f>)));
-    clear();
-}
-
-__host__ FeatureBuffer::~FeatureBuffer() {
-    checkCudaErrors(cudaFree(color));
-    checkCudaErrors(cudaFree(normal));
-    checkCudaErrors(cudaFree(position));
-    checkCudaErrors(cudaFree(albedo));
-    checkCudaErrors(cudaFree(uv));
-}
-void FeatureBuffer::clear() {
-    int threadsPerBlock = 256;
-    size_t blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
-
-    clearFeatureBuffer<<<blocksPerGrid, threadsPerBlock>>>(this);
-    checkCudaErrors(cudaDeviceSynchronize());
 }
 
 
@@ -210,13 +131,10 @@ void GUI::loop(const Scene &scene) {
 
     std::cout << "Initializing GUI loop\n";
 
-    constexpr int MAX_SIZE = 4;// code breaks if viewports get constructed/destroyed
-
     std::vector<std::shared_ptr<Renderable>> viewports;
-    viewports.reserve(MAX_SIZE);
 
     auto camTf = Eigen::Isometry3f::Identity();
-    static constexpr float eyeWidth = 1.0;
+    static constexpr float eyeWidth = 0.1;
 
     constexpr int width = 1024;
     constexpr int height = 1024;
@@ -224,14 +142,14 @@ void GUI::loop(const Scene &scene) {
     camTf.translate(Eigen::Vector3f{0, 0.919769, -5.41159});
     auto vp = std::make_shared<OpenGLViewport>(scene, width, height, "Raw Output", Camera{camTf, 35, 1.0f, 0.01, 30.0});
 
-    viewports.push_back(std::make_shared<Denoiser>(vp->getFeatureBuffer(), width, height, "Denoised Output"));
+    //    viewports.push_back(std::make_shared<Denoiser>(vp->getFeatureBuffer(), width, height, "Denoised Output"));
     viewports.push_back(vp);
 
-    viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
-    viewports.push_back(std::make_shared<BufferVisualizer<FunctorIdentity, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->uv, "UV Buffer", width, height, FunctorIdentity{}));
-
     //    camTf.translate(Eigen::Vector3f{eyeWidth, 0, 0});
-    //    viewports.emplace_back(width, height, "right eye", Camera{camTf, 35, 1.0f, 0.01, 30.0});
+    //    viewports.emplace_back(std::make_shared<OpenGLViewport>(scene, width, height, "Offset Viewport", Camera{camTf, 35, 1.0f, 0.01, 30.0}));
+    
+    viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
+    viewports.push_back(std::make_shared<BufferVisualizer<FunctorPositive, BUFFERTYPE::SAMPLEVARIANCE>>(vp->getFeatureBuffer()->color, "Color Buffer Sample Variance", width, height, FunctorPositive{}));
 
 
     assert(viewports.size() <= MAX_SIZE && "Only 4 viewports supported");
@@ -320,10 +238,12 @@ void GUI::loop(const Scene &scene) {
             ImGui::End();
         }
 
+        auto startRender = std::chrono::high_resolution_clock::now();
         for(auto &_vp: viewports) {
             _vp->renderFrame();
         }
-
+        checkCudaErrors(cudaDeviceSynchronize());
+        auto endRender = std::chrono::high_resolution_clock::now();
 
         {
             ImGui::Begin(settingsTitle.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);
@@ -334,7 +254,7 @@ void GUI::loop(const Scene &scene) {
                 ImGui::Indent(50);
                 for(size_t i = 0; i < viewports.size(); ++i) {
                     ImGui::Indent(40);
-                    ImGui::PushID(i);
+                    ImGui::PushID(safe_uint_to_int(i));
                     if(ImGui::CollapsingHeader(viewports[i]->getTitle().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                         viewports[i]->generateSettings();
                     }
@@ -344,17 +264,27 @@ void GUI::loop(const Scene &scene) {
                 ImGui::Unindent(50);
             }
 
-            if(ImGui::CollapsingHeader("Debug Information")) {
+            if(ImGui::CollapsingHeader("Debug Information", ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::Indent(50);
                 for(size_t i = 0; i < viewports.size(); ++i) {
                     ImGui::Indent(40);
-                    ImGui::PushID(i + viewports.size());
+                    ImGui::PushID(safe_uint_to_int(i + viewports.size()));
                     if(ImGui::CollapsingHeader(viewports[i]->getTitle().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                         viewports[i]->generateDebugInformation();
+                        viewports[i]->generateTimingInformation();
                     }
                     ImGui::PopID();
                     ImGui::Unindent(40);
                 }
+                if(ImGui::CollapsingHeader("FPS", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::Indent(40);
+                    auto durationRender = std::chrono::duration<float, std::milli>(endRender - startRender).count();
+                    ImGui::Text("Current Frame Render Time: %f ms", durationRender);
+                    ImGui::Text("FPS Target: %d achieved: %d", int(1.0 / dt), int(1000.0 / durationRender));
+                    ImGui::Unindent(40);
+                }
+
+
                 ImGui::Unindent(50);
             }
 
@@ -393,311 +323,4 @@ Eigen::Vector2f GUI::getWindowSize() const {
     int width, height;
     glfwGetWindowSize(window, &width, &height);
     return {width, height};
-}
-
-OpenGLViewport::OpenGLViewport(const Scene &scene, int width, int height, std::string title, Camera camera, int spp)
-    : scene(scene), size({static_cast<float>(width), static_cast<float>(height)}), title(std::move(title)),
-      texture(0), resource(nullptr), featureBuffer(nullptr), surface(), camera(std::move(camera)), rngStates(nullptr), samplesPerPixel(spp) {
-
-    checkCudaErrors(cudaMallocManaged(
-            &rngStates,
-            width * height * sizeof(curandState)));
-
-    checkCudaErrors(cudaMallocManaged(
-            &featureBuffer,
-            sizeof(FeatureBuffer)));
-
-    new(featureBuffer) FeatureBuffer(width * height);
-
-    //    *featureBuffer = FeatureBuffer(width * height);
-
-    int threadsPerBlock = 256;// Optimal number of threads per block
-    int blocksPerGrid = (width * height + threadsPerBlock - 1) / threadsPerBlock;
-
-    initializeRNG<<<blocksPerGrid, threadsPerBlock>>>(
-            rngStates, width * height);
-
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    glGenTextures(1, &texture);
-
-    glBindTexture(GL_TEXTURE_2D, texture);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, nullptr);
-
-
-    checkCudaErrors(cudaGraphicsGLRegisterImage(&resource, texture, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsNone));
-
-
-    //TODO map multiple resources at once to batch all viewports
-    checkCudaErrors(cudaGraphicsMapResources(1, &resource, nullptr));
-
-    cudaArray_t cudaArray;
-    checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&cudaArray, resource, 0, 0));
-
-    cudaResourceDesc resDesc = {};
-    resDesc.resType = cudaResourceTypeArray;
-    resDesc.res.array.array = cudaArray;
-
-
-    checkCudaErrors(cudaCreateSurfaceObject(&surface, &resDesc));
-}
-
-void OpenGLViewport::renderFrame() {
-
-
-    t += dt;
-    //    float circleScale = 1.0;
-    //    translateCamera(dt * Eigen::Vector3f{circleScale * std::sin(t), 0.0, circleScale * std::cos(t)});
-
-    handleUserInput();
-
-    ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
-                                                                        //    ImGui::SetWindowSize(size);
-
-
-    scene.render(surface, featureBuffer, camera, rngStates, size, samplesPerPixel);
-
-
-    glClear(GL_COLOR_BUFFER_BIT);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glBegin(GL_QUADS);
-    glTexCoord2f(0, 0);
-    glVertex2f(-1, -1);
-    glTexCoord2f(1, 0);
-    glVertex2f(1, -1);
-    glTexCoord2f(1, 1);
-    glVertex2f(1, 1);
-    glTexCoord2f(0, 1);
-    glVertex2f(-1, 1);
-    glEnd();
-
-    ImGui::Image(texture, size);
-
-    ImGui::End();
-}
-void OpenGLViewport::translateCamera(const Eigen::Vector3f &translation) {
-    camera.translate(translation);
-    featureBuffer->clear();
-}
-
-void OpenGLViewport::translateCameraRelative(const Eigen::Vector3f &translation) {
-    camera.relativeTranslate(translation);
-    featureBuffer->clear();
-}
-
-void OpenGLViewport::generateSettings() {
-    ImGui::SliderInt("Samples per Pixel", &samplesPerPixel, 1, 16);
-}
-OpenGLViewport::~OpenGLViewport() {
-
-    checkCudaErrors(cudaDestroySurfaceObject(surface));
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &resource, nullptr));
-
-    checkCudaErrors(cudaFree(rngStates));
-    checkCudaErrors(cudaFree(featureBuffer));
-
-    checkCudaErrors(cudaGraphicsUnregisterResource(resource));
-    glDeleteTextures(1, &texture);
-}
-std::string OpenGLViewport::getTitle() const {
-    return title;
-}
-void OpenGLViewport::generateDebugInformation() {
-}
-Eigen::Vector2f OpenGLViewport::getWindowSize() const {
-    return Eigen::Vector2f{size[0], size[1]};
-}
-FeatureBuffer *OpenGLViewport::getFeatureBuffer() const {
-    return featureBuffer;
-}
-void OpenGLViewport::handleUserInput() {
-    constexpr float cameraVel = 10.0;
-    if(ImGui::IsKeyPressed(ImGuiKey_W)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{0, 0, dt});
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_S)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{0, 0, -dt});
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_Space)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{0, dt, 0});
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_LeftShift)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{0, -dt, 0});
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_D)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{dt, 0, 0});
-    }
-    if(ImGui::IsKeyPressed(ImGuiKey_A)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{-dt, 0, 0});
-    }
-}
-
-
-template<typename F, BUFFERTYPE B>
-BufferVisualizer<F, B>::BufferVisualizer(Statistic<Eigen::Vector3f> *stat, std::string title, int width, int height, F f)
-    : stat(stat), size(width, height), title(std::move(title)), f(f) {
-
-
-    glGenTextures(1, &texture);
-
-    glBindTexture(GL_TEXTURE_2D, texture);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, nullptr);
-
-
-    checkCudaErrors(cudaGraphicsGLRegisterImage(&resource, texture, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsNone));
-
-
-    //TODO map multiple resources at once to batch all viewports
-    checkCudaErrors(cudaGraphicsMapResources(1, &resource, nullptr));
-
-    cudaArray_t cudaArray;
-    checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&cudaArray, resource, 0, 0));
-
-    cudaResourceDesc resDesc = {};
-    resDesc.resType = cudaResourceTypeArray;
-    resDesc.res.array.array = cudaArray;
-
-
-    checkCudaErrors(cudaCreateSurfaceObject(&surface, &resDesc));
-}
-
-template<typename F, BUFFERTYPE B>
-BufferVisualizer<F, B>::~BufferVisualizer() {
-    checkCudaErrors(cudaDestroySurfaceObject(surface));
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &resource, nullptr));
-
-    checkCudaErrors(cudaGraphicsUnregisterResource(resource));
-    glDeleteTextures(1, &texture);
-}
-
-template<typename F, BUFFERTYPE B>
-std::string BufferVisualizer<F, B>::getTitle() const {
-    return title;
-}
-
-template<typename F, BUFFERTYPE B>
-void BufferVisualizer<F, B>::generateDebugInformation() {
-}
-template<typename F, BUFFERTYPE B>
-void BufferVisualizer<F, B>::generateSettings() {
-}
-template<typename F, BUFFERTYPE B>
-void BufferVisualizer<F, B>::renderFrame() {
-
-    ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
-                                                                        //    ImGui::SetWindowSize(size);
-
-    int threadsPerBlock = 256;// Optimal number of threads per block
-    int blocksPerGrid = (size[0] * size[1] + threadsPerBlock - 1) / threadsPerBlock;
-
-    renderBuffer<B><<<blocksPerGrid, threadsPerBlock>>>(stat, surface, size[0], size[1], f);
-    checkCudaErrors(cudaDeviceSynchronize());
-
-
-    glClear(GL_COLOR_BUFFER_BIT);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glBegin(GL_QUADS);
-    glTexCoord2f(0, 0);
-    glVertex2f(-1, -1);
-    glTexCoord2f(1, 0);
-    glVertex2f(1, -1);
-    glTexCoord2f(1, 1);
-    glVertex2f(1, 1);
-    glTexCoord2f(0, 1);
-    glVertex2f(-1, 1);
-    glEnd();
-
-    ImGui::Image(texture, size);
-
-    ImGui::End();
-}
-
-
-Denoiser::Denoiser(FeatureBuffer *buffer, int width, int height, std::string title)
-    : buffer(buffer), size(width, height), title(std::move(title)), texture(0), resource(nullptr), surface() {
-
-    glGenTextures(1, &texture);
-
-    glBindTexture(GL_TEXTURE_2D, texture);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, nullptr);
-
-
-    checkCudaErrors(cudaGraphicsGLRegisterImage(&resource, texture, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsNone));
-
-
-    //TODO map multiple resources at once to batch all viewports
-    checkCudaErrors(cudaGraphicsMapResources(1, &resource, nullptr));
-
-    cudaArray_t cudaArray;
-    checkCudaErrors(cudaGraphicsSubResourceGetMappedArray(&cudaArray, resource, 0, 0));
-
-    cudaResourceDesc resDesc = {};
-    resDesc.resType = cudaResourceTypeArray;
-    resDesc.res.array.array = cudaArray;
-
-
-    checkCudaErrors(cudaCreateSurfaceObject(&surface, &resDesc));
-}
-Denoiser::~Denoiser() {
-    checkCudaErrors(cudaDestroySurfaceObject(surface));
-    checkCudaErrors(cudaGraphicsUnmapResources(1, &resource, nullptr));
-
-    checkCudaErrors(cudaGraphicsUnregisterResource(resource));
-    glDeleteTextures(1, &texture);
-}
-std::string Denoiser::getTitle() const {
-    return title;
-}
-void Denoiser::generateDebugInformation() {
-}
-void Denoiser::generateSettings() {
-}
-void Denoiser::renderFrame() {
-
-    ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
-                                                                        //    ImGui::SetWindowSize(size);
-
-    int devId = 0;
-    int numSMs;
-    checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
-
-
-    denoise<<<32 * numSMs, 256>>>(surface, buffer, size[0], size[1]);
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    glClear(GL_COLOR_BUFFER_BIT);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glBegin(GL_QUADS);
-    glTexCoord2f(0, 0);
-    glVertex2f(-1, -1);
-    glTexCoord2f(1, 0);
-    glVertex2f(1, -1);
-    glTexCoord2f(1, 1);
-    glVertex2f(1, 1);
-    glTexCoord2f(0, 1);
-    glVertex2f(-1, 1);
-    glEnd();
-
-    ImGui::Image(texture, size);
-
-    ImGui::End();
 }
