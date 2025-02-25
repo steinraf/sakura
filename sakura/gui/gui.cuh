@@ -22,13 +22,14 @@ public:
     explicit GUI(bool fullscreen);
     ~GUI();
 
-    void loop(const Scene &scene);
+    void loop(const Scene &scene, std::vector<Sensor> sensors);
 
     [[nodiscard]] Eigen::Vector2f getWindowSize() const;
 
 private:
     bool fullscreen;
     GLFWwindow *window;
+
 
     const std::string applicationTitle = "Sakura";
     const std::string settingsTitle = "Settings";

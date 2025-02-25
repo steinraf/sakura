@@ -24,7 +24,7 @@ void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &c
     int devId = 0;
     int numSMs;
     checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
-    
+
     render_kern<<<32 * numSMs, 256>>>(bvh, buffer, camera, rngStates, windowSize[0], windowSize[1], spp);
     checkCudaErrors(cudaDeviceSynchronize());
     bufferToSurface<<<32 * numSMs, 256>>>(surface, buffer, windowSize[0], windowSize[1]);
@@ -71,7 +71,6 @@ SceneBuilder &SceneBuilder::addObj(
                 std::string vertexIndex;
                 std::getline(vertexStream, vertexIndex, '/');
                 faceVertices[i] = vertices[std::stoi(vertexIndex) - 1];
-                faceVertices[i][2] *= -1;//TODO remove
                 std::string textureIndex;
                 std::getline(vertexStream, textureIndex, '/');
                 //                uvTextures[i] = uvs[std::stoi(textureIndex) -
@@ -103,36 +102,35 @@ SceneBuilder &SceneBuilder::addTriangle(const Triangle &triangle) {
 SceneBuilder &SceneBuilder::parseXML(
         const std::string &filename) noexcept(false) {
 
+    currentXMLRoot = std::filesystem::path{filename}.parent_path();
+
     auto [doc, root] = loadXML(filename);
 
     [[maybe_unused]] const auto &rootLogger = sceneLogger.getNewSection("scene");
 
-#define CREATE_PARSER(name) {#name, [&](const pugi::xml_node &node, const auto &logger) { parse_##name(node, logger); }}
+#define CREATE_PARSER(name) {#name, [&](const pugi::xml_node &node, auto &logger) { parse_##name(node, logger); }}
 
-    static const std::unordered_map<std::string, std::function<void(const pugi::xml_node &, const ScopedLogger &)>>
+    static const std::unordered_map<std::string, std::function<void(const pugi::xml_node &, ScopedLogger &)>>
             parsers{
                     CREATE_PARSER(shape),
+                    CREATE_PARSER(sensor),
+                    CREATE_PARSER(default),
             };
 
-    for(const auto &node: root.children()) {
-        if(node.type() == pugi::node_comment ||
-           node.type() == pugi::node_declaration)
-            continue;
-        if(node.type() != pugi::node_element)
-            throw std::runtime_error("Unknown XML Node encountered.");
-
-
+    xmlChildIterator(root, [&](const pugi::xml_node &node) {
         std::string name = node.name();
 
-        const auto &logger = sceneLogger.getNewSection(name);
-
+        auto logger = sceneLogger.getNewSection(name);
 
         if(auto it = parsers.find(name); it != parsers.end()) {
             it->second(node, logger);
         } else {
             logger.log<true>("Warning: Ignoring XML Node \"" + name + "\"");
         }
-    }
+    });
+
+    currentXMLRoot.clear();
+
     return *this;
 }
 
@@ -165,24 +163,27 @@ std::pair<pugi::xml_document, pugi::xml_node> SceneBuilder::loadXML(const std::s
 }
 
 
-void SceneBuilder::parse_shape(const pugi::xml_node &shape, const auto &logger) {
+void SceneBuilder::parse_shape(const pugi::xml_node &shape, auto &logger) {
 
     auto attribute = lookupName(shape.attribute("type").value());
     if(attribute == "obj") {
 
+        xmlChildIterator(shape, [&](const pugi::xml_node &node) {
+            if(std::string(node.name()) == "string") {
+                auto name = lookupName(node.attribute("name").value());
+                auto filename = lookupName(node.attribute("value").value());
+                if(name != "filename") {
+                    throw std::runtime_error("String attribute should have name \"filename\", not " + filename);
+                }
 
-        auto filenameNode = shape.find_child([](const pugi::xml_node &attrib) {
-            return std::string(attrib.name()) == "string";
+                addObj(currentXMLRoot / filename);
+                logger.template log<false>("FOUND OBJ " + filename);
+            } else {
+                logger.template log<true>("Ignoring XML Node " + std::string(node.name()));
+            }
         });
-        auto filename = lookupName(filenameNode.attribute("value").value());
 
-        if(lookupName(filenameNode.attribute("name").value()) != "filename") {
-            throw std::runtime_error("String attribute should have name \"filename\", not " + filename);
-        }
 
-        addObj(filename);
-
-        logger.template log<false>("FOUND OBJ " + std::string(filename));
     } else {
         logger.template log<true>("Ignoring shape due to attribute " + attribute);
     }
@@ -279,9 +280,183 @@ std::string SceneBuilder::lookupName(const std::string &name) const {
     if(name.empty()) return name;
     if(name[0] != '$') return name;
     try {
-        return nameMap.at(name);
+        return nameMap.at(name.substr(1));
     } catch(const std::out_of_range &e) {
         throw std::runtime_error("Unknown XML name alias " + name);
+    }
+}
+void SceneBuilder::xmlChildIterator(const pugi::xml_node &node, auto func) const {
+    for(const auto &child: node.children()) {
+        if(child.type() == pugi::node_comment ||
+           child.type() == pugi::node_declaration)
+            continue;
+        if(child.type() != pugi::node_element)
+            throw std::runtime_error("Unknown XML Node encountered.");
+
+        func(child);
+    }
+}
+void SceneBuilder::parse_sensor(const pugi::xml_node &sensor, auto &logger) {
+    auto attribute = lookupName(sensor.attribute("type").value());
+    if(attribute != "perspective") {
+        logger.template log<false>("Non-perspective sensor ignored.");
+        return;
+    }
+
+    CameraBuilder cameraBuilder;
+
+    Sensor s;
+
+    xmlChildIterator(sensor, [&](const pugi::xml_node &node) {
+        if(std::string(node.name()) == "float") {
+            auto name = lookupName(node.attribute("name").value());
+            auto value = std::stof(lookupName(node.attribute("value").value()));
+            if(name == "fov") {
+                cameraBuilder.setFOV(value);
+                logger.template log<false>("<float name=\"fov\" value=\"" + std::to_string(value) + "\"/>");
+            } else if(name == "aspectRatio") {
+                cameraBuilder.setAspectRatio(value);
+                logger.template log<false>("<float name=\"aspectRatio\" value=\"" + std::to_string(value) + "\"/>");
+            } else if(name == "aperture") {
+                cameraBuilder.setAperture(value);
+                logger.template log<false>("<float name=\"aperture\" value=\"" + std::to_string(value) + "\"/>");
+            } else if(name == "focusDist") {
+                cameraBuilder.setFocusDist(value);
+                logger.template log<false>("<float name=\"focusDist\" value=\"" + std::to_string(value) + "\"/>");
+            } else if(name == "near") {
+                cameraBuilder.setNear(value);
+                logger.template log<false>("<float name=\"near\" value=\"" + std::to_string(value) + "\"/>");
+            } else if(name == "far") {
+                cameraBuilder.setFar(value);
+                logger.template log<false>("<float name=\"far\" value=\"" + std::to_string(value) + "\"/>");
+            } else {
+                logger.template log<true>("Ignoring float attribute " + name);
+            }
+        } else if(std::string(node.name()) == "transform") {
+            Eigen::Isometry3f tf = Eigen::Isometry3f::Identity();
+            xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                tf = parseTransform(node, logger.getNewSection("transform"));
+            });
+            cameraBuilder.setTransform(tf);
+        } else if(std::string(node.name()) == "sampler") {
+
+
+            if(std::string(node.attribute("type").value()) == "independent") {
+                xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                    if(std::string(node.name()) == "integer") {
+                        auto name = lookupName(node.attribute("name").value());
+                        auto value = std::stoi(lookupName(node.attribute("value").value()));
+                        if(name == "sample_count") {
+                            s.samplingPattern.spp = value;
+                            logger.template log<false>("<integer name=\"sample_count\" value=\"" + std::to_string(value) + "\"/>");
+                        } else {
+                            logger.template log<true>("Ignoring integer attribute " + name);
+                        }
+                    } else {
+                        logger.template log<true>("Ignoring XML Node " + std::string(node.name()));
+                    }
+                });
+            } else {
+                logger.template log<false>("Ignoring sampler type " + std::string(node.attribute("type").value()) + ". Using independent.");
+            }
+        } else if(std::string(node.name()) == "film") {
+            if(std::string(node.attribute("type").value()) == "hdrfilm") {
+                xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                    if(std::string(node.name()) == "integer") {
+                        auto name = lookupName(node.attribute("name").value());
+                        auto value = std::stoi(lookupName(node.attribute("value").value()));
+                        if(name == "width") {
+                            s.film.size[0] = value;
+                            logger.template log<false>("<integer name=\"width\" value=\"" + std::to_string(value) + "\"/>");
+                        } else if(name == "height") {
+                            s.film.size[1] = value;
+                            logger.template log<false>("<integer name=\"height\" value=\"" + std::to_string(value) + "\"/>");
+                        } else {
+                            logger.template log<true>("Ignoring integer attribute " + name);
+                        }
+                    } else {
+                        logger.template log<true>("Ignoring XML Node " + std::string(node.name()));
+                    }
+                });
+            } else {
+                logger.template log<false>("Ignoring film type " + std::string(node.attribute("type").value()) + ". Using hdrfilm.");
+            }
+        } else {
+            logger.template log<true>("Ignoring XML Node " + std::string(node.name()));
+        }
+    });
+
+    s.camera = cameraBuilder.build();
+    sensors.push_back(s);
+}
+Eigen::Isometry3f SceneBuilder::parseTransform(const pugi::xml_node &node, auto logger) const {
+    auto nodeName = std::string(node.name());
+    Eigen::Isometry3f tf = Eigen::Isometry3f::Identity();
+    auto vecToString = [](const Eigen::Vector3f &vec) {
+        return (std::ostringstream{} << vec[0] << ' ' << vec[1] << ' ' << vec[2]).str();
+    };
+    if(std::string(node.name()) == "matrix") {
+        std::string matrix = node.attribute("value").value();
+        std::replace(matrix.begin(), matrix.end(), ',', ' ');
+        std::istringstream matrixStream{matrix};
+        for(int i = 0; i < 4; i++) {
+            for(int j = 0; j < 4; j++) {
+                matrixStream >> tf.matrix()(i, j);
+            }
+        }
+        logger.template log<false>("<matrix value=\"" + (std::ostringstream{} << tf.matrix()).str() + "\"/>");
+    } else if(std::string(node.name()) == "lookat") {
+        Eigen::Vector3f target = -Eigen::Vector3f::UnitZ(), origin = Eigen::Vector3f::Zero(), up = Eigen::Vector3f::UnitY();
+        for(const auto &attribute: node.attributes()) {
+            if(std::string(attribute.name()) == "target") {
+                target = parseVector(attribute.value());
+                logger.template log<false>("<lookat target=\"" + vecToString(target) + "\"/>");
+            } else if(std::string(attribute.name()) == "origin") {
+                origin = parseVector(attribute.value());
+                logger.template log<false>("<lookat origin=\"" + vecToString(origin) + "\"/>");
+            } else if(std::string(attribute.name()) == "up") {
+                up = parseVector(attribute.value());
+                logger.template log<false>("<lookat up=\"" + vecToString(up) + "\"/>");
+            } else {
+                logger.template log<true>("Ignoring attribute " + std::string(attribute.name()));
+            }
+        }
+        tf = Camera::lookAt(origin, target, up);
+    } else {
+        logger.template log<true>("Unknown transform type " + std::string(node.name()));
+    }
+
+    return tf;
+}
+Eigen::Vector3f SceneBuilder::parseVector(std::string str) const {
+    std::replace(str.begin(), str.end(), ',', ' ');
+    std::istringstream stream{str};
+    Eigen::Vector3f vec;
+    if(!(stream >> vec.x() >> vec.y() >> vec.z())) {
+        throw std::runtime_error("Could not parse vector " + str);
+    }
+    return vec;
+}
+SceneBuilder &SceneBuilder::getSensors(std::vector<Sensor> &s) {
+    s.resize(this->sensors.size());
+    for(int i = 0; i < s.size(); i++) {
+        s[i] = this->sensors[i];
+    }
+    return *this;
+}
+void SceneBuilder::parse_default(const pugi::xml_node &node, auto &logger) {
+    unsigned int attrCount = 0;
+    for(const auto &attribute: node.attributes()) {
+        attrCount++;
+    }
+
+    if(attrCount == 2) {
+        auto name = lookupName(node.attribute("name").value());
+        auto value = lookupName(node.attribute("value").value());
+        nameMap[name] = value;
+        logger.template log<false>("name=\"" + name + "\" value=\"" + value + "\"");
+    } else {
+        logger.template log<true>("Too many attributes in default " + std::string(node.name()) + ". Ignoring.");
     }
 }
 

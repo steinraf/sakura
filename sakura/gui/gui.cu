@@ -17,6 +17,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <cuda_gl_interop.h>
+#include <thread>
 
 #include "viewport.cuh"
 
@@ -127,31 +128,35 @@ struct FunctorIdentity {
     }
 };
 
-void GUI::loop(const Scene &scene) {
+void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
 
     std::cout << "Initializing GUI loop\n";
 
     std::vector<std::shared_ptr<Renderable>> viewports;
 
-    auto camTf = Eigen::Isometry3f::Identity();
+    if(sensors.size() != 1) {
+        std::cerr << "Only 1 sensor can be loaded from a file\n";
+        exit(1);
+    }
+
     static constexpr float eyeWidth = 0.1;
 
-    constexpr int width = 1024;
-    constexpr int height = 1024;
+    const auto width = sensors[0].film.size[0];
+    const auto height = sensors[0].film.size[1];
 
-    camTf.translate(Eigen::Vector3f{0, 0.919769, -5.41159});
-    auto vp = std::make_shared<OpenGLViewport>(scene, width, height, "Raw Output", Camera{camTf, 35, 1.0f, 0.01, 30.0});
+    auto vp = std::make_shared<OpenGLViewport>(scene, width, height, "Raw Output", sensors[0].camera);
 
     //    viewports.push_back(std::make_shared<Denoiser>(vp->getFeatureBuffer(), width, height, "Denoised Output"));
     viewports.push_back(vp);
 
     //    camTf.translate(Eigen::Vector3f{eyeWidth, 0, 0});
     //    viewports.emplace_back(std::make_shared<OpenGLViewport>(scene, width, height, "Offset Viewport", Camera{camTf, 35, 1.0f, 0.01, 30.0}));
-    
+
     viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
     viewports.push_back(std::make_shared<BufferVisualizer<FunctorPositive, BUFFERTYPE::SAMPLEVARIANCE>>(vp->getFeatureBuffer()->color, "Color Buffer Sample Variance", width, height, FunctorPositive{}));
 
 
+    constexpr unsigned int MAX_SIZE = 4;
     assert(viewports.size() <= MAX_SIZE && "Only 4 viewports supported");
     std::cout << "Starting GUI loop\n";
 
@@ -244,6 +249,8 @@ void GUI::loop(const Scene &scene) {
         }
         checkCudaErrors(cudaDeviceSynchronize());
         auto endRender = std::chrono::high_resolution_clock::now();
+        auto durationRender = std::chrono::duration<float, std::milli>(endRender - startRender).count();
+
 
         {
             ImGui::Begin(settingsTitle.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);
@@ -278,7 +285,6 @@ void GUI::loop(const Scene &scene) {
                 }
                 if(ImGui::CollapsingHeader("FPS", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::Indent(40);
-                    auto durationRender = std::chrono::duration<float, std::milli>(endRender - startRender).count();
                     ImGui::Text("Current Frame Render Time: %f ms", durationRender);
                     ImGui::Text("FPS Target: %d achieved: %d", int(1.0 / dt), int(1000.0 / durationRender));
                     ImGui::Unindent(40);
@@ -308,6 +314,14 @@ void GUI::loop(const Scene &scene) {
 
         glfwSwapBuffers(window);
         t += dt;
+
+        auto diff = dt - durationRender;
+
+
+        if(diff > 0) {
+            std::cout << "Sleeping for " << diff << " ms\n";
+            std::this_thread::sleep_for(std::chrono::milliseconds(int(diff * 1000)));
+        }
     }
 
     std::cout << "Exiting GUI loop\n";

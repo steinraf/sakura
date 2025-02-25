@@ -202,10 +202,10 @@ void OpenGLViewport::handleUserInput() {
     if(ImGui::IsKeyPressed(ImGuiKey_LeftShift)) {
         translateCameraRelative(cameraVel * Eigen::Vector3f{0, -dt, 0});
     }
-    if(ImGui::IsKeyPressed(ImGuiKey_D)) {
+    if(ImGui::IsKeyPressed(ImGuiKey_A)) {
         translateCameraRelative(cameraVel * Eigen::Vector3f{dt, 0, 0});
     }
-    if(ImGui::IsKeyPressed(ImGuiKey_A)) {
+    if(ImGui::IsKeyPressed(ImGuiKey_D)) {
         translateCameraRelative(cameraVel * Eigen::Vector3f{-dt, 0, 0});
     }
 }

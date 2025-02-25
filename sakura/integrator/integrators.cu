@@ -18,7 +18,7 @@ __global__ void render_kern(BVH *bvh, FeatureBuffer *buffer,
 
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
         pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
-        size_t x = width - 1 - pixelIndex % width, y = pixelIndex / width;
+        size_t x = pixelIndex % width, y = pixelIndex / width;
 
 
         Sampler sampler{&rngStates[pixelIndex]};

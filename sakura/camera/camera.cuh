@@ -17,6 +17,8 @@ public:
                                float focusDist, float near = 0.1f,
                                float far = 100.0f) noexcept;
 
+    __host__ __device__ static Eigen::Isometry3f lookAt(const Eigen::Vector3f &center, const Eigen::Vector3f &lookAt, const Eigen::Vector3f &up);
+
     // Takes in screen-space coordinates u, v and sampler
     // returns ray originating from the camera
     __device__ Ray getRay(float u, float v, Sampler &sampler) const;
@@ -55,4 +57,42 @@ private:
     float focusDist = 1.0;
     float near = 0.1;
     float far = 100.0;
+};
+
+enum class FilmFormat {
+    PNG,
+};
+
+enum class ColorSpace {
+    RGB,
+};
+
+struct Film {
+    Eigen::Vector2<unsigned> size = {1024, 1024};
+    FilmFormat format = FilmFormat::PNG;
+    ColorSpace colorSpace = ColorSpace::RGB;
+};
+
+enum class SamplingStrategy {
+    UNIFORM,
+};
+
+struct SamplingPattern {
+    int spp = 1;
+    SamplingStrategy strategy = SamplingStrategy::UNIFORM;
+};
+
+enum class ReconstructionType {
+    NONE,
+};
+
+struct ReconstructionFilter {
+    ReconstructionType type = ReconstructionType::NONE;
+};
+
+struct Sensor {
+    Camera camera{};
+    Film film{};
+    ReconstructionFilter reconstructionFilter{};
+    SamplingPattern samplingPattern{};
 };

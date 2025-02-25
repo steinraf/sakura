@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <curand_kernel.h>
+#include <filesystem>
 #include <omp.h>
 
 #include "imgui.h"
@@ -73,7 +74,7 @@ private:
 
 class SceneBuilder {
 public:
-    explicit SceneBuilder() = default;
+    SceneBuilder() = default;
 
 
     // Load scene component from file
@@ -82,6 +83,8 @@ public:
 
     // Directly add Components
     SceneBuilder &addTriangle(const Triangle &triangle);
+
+    SceneBuilder &getSensors(std::vector<Sensor> &s);
 
 
     [[nodiscard]] Scene build();
@@ -92,19 +95,28 @@ private:
     //has to match upper/lower case because of macro
 
 
-    void parse_shape(const pugi::xml_node &shape, const auto &logger);
-
+    void parse_shape(const pugi::xml_node &shape, auto &logger);
+    void parse_sensor(const pugi::xml_node &sensor, auto &logger);
+    void parse_default(const pugi::xml_node &node, auto &logger);
 
     // Prepare the XML file for parsing
     // returns document and document root
     [[nodiscard]] static std::pair<pugi::xml_document, pugi::xml_node> loadXML(const std::string &filename) noexcept(false);
 
+    void xmlChildIterator(const pugi::xml_node &node, auto func) const;
+
+    Eigen::Isometry3f parseTransform(const pugi::xml_node &node, auto logger) const;
+    Eigen::Vector3f parseVector(std::string str) const;
+
     [[nodiscard]] std::string lookupName(const std::string &name) const;
     std::unordered_map<std::string, std::string> nameMap;
 
     std::vector<Triangle> triangles;
+    std::vector<Sensor> sensors;
 
-    SceneLogger sceneLogger{};
+    SceneLogger sceneLogger;
+
+    std::filesystem::path currentXMLRoot;
 };
 
 

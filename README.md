@@ -73,7 +73,7 @@ In order to see the video in 3D, cross your eyes to overlap the images.
     - [ ] Temporal
     - [ ] Adaptive Sampling
 - Sampling
-    - [ ] Random
+    - [X] Random
     - [ ] Adaptive
     - [ ] low discrepancy
 

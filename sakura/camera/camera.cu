@@ -19,20 +19,21 @@ __host__ __device__ Camera::Camera(Eigen::Isometry3f tf, float fov,
                                    float focusDist, float near,
                                    float far) noexcept
     : cameraTransform(std::move(tf)),
+
       sampleToCamera(),
       k(tanf(fov * M_PIf / 360.f)),
       near(near),
       far(far),
       focusDist(focusDist),
       lensRadius(sqrtf(2.f) / 2.f * aperture * aspectRatio) {
+
     sampleToCamera.matrix() << 2 * k, 0.f, 0.f, -k,         //
             0.f, -2 * k / aspectRatio, 0.f, k / aspectRatio,//
             0.f, 0.f, 0.f, 1.f,                             //
             0.f, 0.f, (near - far) / (near * far), 1.f / near;
 }
 __device__ Ray Camera::getRay(float u, float v, Sampler &sampler) const {
-    Eigen::Vector4f nearSample =
-            (sampleToCamera * Eigen::Vector4f{u, v, 0.0, 1.0});
+    Eigen::Vector4f nearSample = (sampleToCamera * Eigen::Vector4f{u, v, 0.0, 1.0});
 
     assert(nearSample[3] != 0.0f);
 
@@ -62,6 +63,21 @@ __host__ __device__ void Camera::translate(const Eigen::Vector3f &x) {
 }
 __host__ __device__ void Camera::relativeTranslate(const Eigen::Vector3f &x) {
     cameraTransform.translation() += cameraTransform.linear() * x;
+}
+__host__ __device__ Eigen::Isometry3f Camera::lookAt(const Eigen::Vector3f &center, const Eigen::Vector3f &lookAt, const Eigen::Vector3f &up) {
+    Eigen::Vector3f f = (lookAt - center).normalized();
+    Eigen::Vector3f r = up.cross(-f).normalized();
+    Eigen::Vector3f u = -f.cross(r);
+
+    Eigen::Isometry3f tf = Eigen::Isometry3f::Identity();
+    tf.linear().col(0) = r;
+    tf.linear().col(1) = u;
+    tf.linear().col(2) = f;
+    tf.translation() = center;
+
+    printf("tf = %f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n", tf.matrix()(0, 0), tf.matrix()(0, 1), tf.matrix()(0, 2), tf.matrix()(0, 3), tf.matrix()(1, 0), tf.matrix()(1, 1), tf.matrix()(1, 2), tf.matrix()(1, 3), tf.matrix()(2, 0), tf.matrix()(2, 1), tf.matrix()(2, 2), tf.matrix()(2, 3), tf.matrix()(3, 0), tf.matrix()(3, 1), tf.matrix()(3, 2), tf.matrix()(3, 3));
+
+    return tf;
 }
 
 CameraBuilder &CameraBuilder::setTransform(Eigen::Isometry3f transform) {
