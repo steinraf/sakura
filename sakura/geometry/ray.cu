@@ -12,8 +12,8 @@ __host__ __device__ Eigen::Vector3f Ray::at(float t) const noexcept {
     assert(t >= minDist && t <= maxDist);
     return origin + t * dir;
 }
-__host__ __device__ void Ray::transform(const Eigen::Matrix4f &transform) noexcept {
-    origin = (transform * Eigen::Vector4f(origin.x(), origin.y(), origin.z(), 1)).head<3>();
-    dir = (transform * Eigen::Vector4f(dir.x(), dir.y(), dir.z(), 0)).head<3>();
-    dir.normalize();
+__host__ __device__ void Ray::transform(const Eigen::Affine3f &transform) noexcept {
+    origin = transform * origin;
+    dir = transform.rotation() * dir;
+    assert(dir.norm() > 1 - RAY_EPSILON && dir.norm() < 1 + RAY_EPSILON);
 }

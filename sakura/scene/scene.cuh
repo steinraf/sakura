@@ -16,6 +16,7 @@
 #include "pngwriter.h"
 #include "pugixml.hpp"
 
+#include "../acceleration/multibvh.cuh"
 #include "../common.cuh"
 #include "../geometry/triangle.cuh"
 
@@ -28,7 +29,7 @@ public:
 private:
     friend class SceneBuilder;
     Scene() = default;
-    BVH *bvh;
+    TLAS *tlas;
 };
 
 class SceneLogger;
@@ -79,10 +80,10 @@ public:
 
     // Load scene component from file
     SceneBuilder &parseXML(const std::string &filename) noexcept(false);
-    SceneBuilder &addObj(const std::string &filename, const Eigen::Affine3f &tf = Eigen::Affine3f::Identity());
+    SceneBuilder &addObj(const std::string &filename, const Eigen::Affine3f &tf = Eigen::Affine3f::Identity(), Material material = Material(), Texture texture = Texture());
 
     // Directly add Components
-    SceneBuilder &addTriangle(const Triangle &triangle);
+    //    SceneBuilder &addTriangle(const Triangle &triangle);
 
     SceneBuilder &getSensors(std::vector<Sensor> &s);
 
@@ -111,13 +112,10 @@ private:
     [[nodiscard]] std::string lookupName(const std::string &name) const;
     std::unordered_map<std::string, std::string> nameMap;
 
-    std::vector<Triangle> triangles;
+    std::vector<MeshDescriptorHost> meshes;
     std::vector<Sensor> sensors;
 
     SceneLogger sceneLogger;
 
     std::filesystem::path currentXMLRoot;
 };
-
-
-__device__ __host__ constexpr uint32_t LeftShift3(uint32_t x) noexcept;

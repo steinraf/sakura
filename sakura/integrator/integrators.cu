@@ -2,14 +2,15 @@
 // Created by steinraf on 05.02.25.
 //
 
-#include "../acceleration/bvh.cuh"
+#include "../acceleration/multibvh.cuh"
 #include "../camera/camera.cuh"
 #include "../geometry/intersection.cuh"
 #include "../gui/viewport.cuh"
 #include "../rng/sampler.cuh"
 #include "integrators.cuh"
 
-__global__ void render_kern(BVH *bvh, FeatureBuffer *buffer,
+
+__global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
                             Camera camera, curandState *rngStates,
                             unsigned int width, unsigned int height, int spp) {
 
@@ -48,7 +49,7 @@ __global__ void render_kern(BVH *bvh, FeatureBuffer *buffer,
             int numBounces = 0;
 
             while(true) {
-                if(!bvh->intersect(currentRay, intersection)) {
+                if(!tlas->intersect(currentRay, intersection, false)) {
 
                     color.array() += t.array() * backgroundColor.array();
                     if(numBounces == 0) {

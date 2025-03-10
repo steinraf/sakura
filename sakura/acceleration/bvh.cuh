@@ -71,6 +71,7 @@ private:
 public:
     __device__ __host__ explicit BVH(AccelerationNode *root) noexcept;
 
+
     [[nodiscard]] __device__ bool intersect(
             const Ray &ray, Intersection &its,
             bool isShadowRay = false) const noexcept;
@@ -91,3 +92,8 @@ __device__ thrust::pair<unsigned int, unsigned int> determineRange(const uint32_
 __global__ void constructBVH(AccelerationNode *bvhNodes, Triangle *triangles,
                              size_t numTriangles, const uint32_t *mortonCodes,
                              unsigned short int *bvhNodeDone);
+
+
+BVH *getBVH(const std::vector<Triangle> &triangles);
+
+__device__ __host__ constexpr uint32_t LeftShift3(uint32_t x) noexcept;

@@ -4,6 +4,9 @@
 
 #include <utility>
 
+#include <thrust/device_vector.h>
+#include <thrust/sort.h>
+
 #include "../geometry/intersection.cuh"
 #include "../geometry/ray.cuh"
 #include "../geometry/triangle.cuh"
@@ -105,6 +108,7 @@ __device__ __host__ BVH::BVH(AccelerationNode *root) noexcept
 
     return true;
 }
+
 
 __device__ unsigned findSplit(const uint32_t *mortonCodes, unsigned int first, unsigned int last,
                               size_t numPrimitives) {
@@ -279,4 +283,95 @@ __global__ void constructBVH(AccelerationNode *bvhNodes, Triangle *triangles,
 
         // Both Children are done computing
     }
+}
+
+
+BVH *getBVH(const std::vector<Triangle> &triangles) {
+    Triangle *trias;
+    checkCudaErrors(
+            cudaMallocManaged(&trias, triangles.size() * sizeof(Triangle)));
+    checkCudaErrors(cudaMemcpy(trias, triangles.data(),
+                               triangles.size() * sizeof(Triangle),
+                               cudaMemcpyHostToDevice));
+
+    std::cout << "Allocated Triangles\n";
+
+    AABB boundingBox = thrust::transform_reduce(
+            thrust::device, trias, trias + triangles.size(),
+            [=] __host__ __device__(const Triangle &t) -> AABB {
+                return t.AABBGetter();
+            },
+            AABB{}, thrust::plus<AABB>());
+
+    std::cout << "Scene Bounding Box: Min\n"
+              << boundingBox.min << "\nMax\n"
+              << boundingBox.max << '\n';
+
+    //TODO have collection of all these kinds of constants
+    constexpr float EPSILON = 1e-6f;
+    const Eigen::Vector3f EPS_VEC{EPSILON, EPSILON, EPSILON};
+
+    Eigen::Vector3f lower = boundingBox.min - EPS_VEC;
+    Eigen::Vector3f dims = boundingBox.max - boundingBox.min + 2 * EPS_VEC;
+
+    thrust::device_vector<uint32_t> mortonCodes(triangles.size());
+    thrust::transform(
+            thrust::device, trias, trias + triangles.size(), mortonCodes.begin(),
+            [=] __host__ __device__(const Triangle &tria) {
+                int numBits = 10;
+                const Eigen::Vector3f normalized =
+                        static_cast<float>(1u << numBits) *
+                        (tria.AABBGetter().getCenter() - lower).array() / dims.array();
+
+                assert(normalized[0] >= 0 && normalized[1] >= 0 &&
+                       normalized[2] >= 0);
+                assert(normalized[0] <= (1u << numBits) &&
+                       normalized[1] <= (1u << numBits) &&
+                       normalized[2] <= (1u << numBits));
+
+                return (LeftShift3(static_cast<uint32_t>(normalized[2])) << 2) |
+                       (LeftShift3(static_cast<uint32_t>(normalized[1])) << 1) |
+                       (LeftShift3(static_cast<uint32_t>(normalized[0])));
+            });
+
+    thrust::sort_by_key(thrust::device, mortonCodes.begin(), mortonCodes.end(),
+                        trias);
+
+    std::cout << "Sorted " << triangles.size() << " Triangles by Morton Code\n";
+    BVH *bvh;
+    AccelerationNode *bvhNodes;
+
+    checkCudaErrors(cudaMallocManaged(&bvh, sizeof(BVH)));
+    checkCudaErrors(cudaMallocManaged(
+            &bvhNodes, 2 * triangles.size() * sizeof(AccelerationNode)));
+
+    unsigned short int *bvhConstructionDone;
+    checkCudaErrors(
+            cudaMallocManaged(&bvhConstructionDone,
+                              (triangles.size() - 1) * sizeof(unsigned short int)));
+
+    auto start = std::chrono::high_resolution_clock::now();
+    // TODO grid stride loop or tune sizes
+    constructBVH<<<(triangles.size() + 255) / 256, 256>>>(
+            bvhNodes, trias, triangles.size(), mortonCodes.data().get(),
+            bvhConstructionDone);
+
+    checkCudaErrors(cudaDeviceSynchronize());
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::high_resolution_clock::now() - start);
+
+    std::cout << "Built BVH in " << duration.count() << "ms\n";
+
+    *bvh = BVH{bvhNodes};
+
+    return bvh;
+}
+
+__device__ __host__ constexpr uint32_t LeftShift3(uint32_t x) noexcept {
+    if(x == (1 << 10)) --x;
+    x = (x | (x << 16)) & 0b00000011000000000000000011111111;
+    x = (x | (x << 8)) & 0b00000011000000001111000000001111;
+    x = (x | (x << 4)) & 0b00000011000011000011000011000011;
+    x = (x | (x << 2)) & 0b00001001001001001001001001001001;
+    return x;
 }

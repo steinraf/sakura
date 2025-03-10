@@ -111,19 +111,23 @@ add_executable(${PROJECT_NAME}
 
 
         main.cu
-        sakura/gui/gui.cu
+        sakura/acceleration/aabb.cu
+        sakura/acceleration/bvh.cu
+        sakura/acceleration/multibvh.cu
+        sakura/camera/camera.cu
+        sakura/common.cu
+        sakura/denoise/denoise.cu
         sakura/geometry/triangle.cu
         sakura/geometry/intersection.cuh
         sakura/geometry/ray.cu
-        sakura/scene/scene.cu
-        sakura/camera/camera.cu
-        sakura/acceleration/aabb.cu
-        sakura/acceleration/bvh.cu
-        sakura/rng/sampler.cu
-        sakura/integrator/integrators.cu
-        sakura/denoise/denoise.cu
-        sakura/common.cu
+        sakura/gui/gui.cu
         sakura/gui/viewport.cu
+        sakura/integrator/integrators.cu
+        sakura/material/bsdf.cu
+        sakura/material/material.cu
+        sakura/rng/sampler.cu
+        sakura/scene/scene.cu
+        sakura/texture/texture.cu
 )
 
 

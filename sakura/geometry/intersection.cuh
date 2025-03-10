@@ -24,7 +24,7 @@ private:
 public:
     Eigen::Vector3f n;
 
-    __device__ explicit Frame(const Eigen::Vector3f &nIn) noexcept
+    __host__ __device__ explicit Frame(const Eigen::Vector3f &nIn) noexcept
         : n(nIn.normalized()) {
         if(abs(n[0]) > abs(n[1])) {
             assert(sqrt(n[0] * n[0] + n[2] * n[2]) > 0);
@@ -40,21 +40,21 @@ public:
         s = t.cross(n).normalized();
     }
 
-    __device__ Frame(const Eigen::Vector3f &s, const Eigen::Vector3f &t,
-                     const Eigen::Vector3f &n) noexcept
+    __host__ __device__ Frame(const Eigen::Vector3f &s, const Eigen::Vector3f &t,
+                              const Eigen::Vector3f &n) noexcept
         : s(s.normalized()), t(t.normalized()), n(n.normalized()) {}
 
-    __device__ Eigen::Vector3f toLocal(
+    __host__ __device__ Eigen::Vector3f toLocal(
             const Eigen::Vector3f &v) const noexcept {
         return {v.dot(s), v.dot(t), v.dot(n)};
     }
 
-    __device__ Eigen::Vector3f toWorld(
+    __host__ __device__ Eigen::Vector3f toWorld(
             const Eigen::Vector3f &v) const noexcept {
         return s * v[0] + t * v[1] + n * v[2];
     }
 
-    __device__ static inline float cosTheta(const Eigen::Vector3f &v) noexcept {
+    __host__ __device__ static inline float cosTheta(const Eigen::Vector3f &v) noexcept {
         return v[2];
     }
 };

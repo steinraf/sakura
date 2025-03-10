@@ -5,25 +5,33 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <cuda/std/atomic>
 
 // Forward declarations
 
 struct AABB;
+class BLAS;
+struct BSDFQueryRecord;
 class BVH;
 class Camera;
 struct FeatureBuffer;
 struct Film;
 class Frame;
 struct Intersection;
+class Material;
 class Ray;
 class Renderable;
 class Sampler;
 struct Sensor;
 class Scene;
 class SceneBuilder;
+class Texture;
+class TLAS;
 class Triangle;
 
+using Vec2f = Eigen::Vector2f;
 using Vec3f = Eigen::Vector3f;
+using Color = Eigen::Vector3f;
 
 
 void checkCudaErrors(cudaError result);

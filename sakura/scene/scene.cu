@@ -15,6 +15,7 @@
 #include "../integrator/integrators.cuh"
 #include "scene.cuh"
 
+#include "../acceleration/multibvh.cuh"
 #include "pugixml.hpp"
 
 
@@ -25,7 +26,7 @@ void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &c
     int numSMs;
     checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
 
-    render_kern<<<32 * numSMs, 256>>>(bvh, buffer, camera, rngStates, windowSize[0], windowSize[1], spp);
+    render_kern<<<32 * numSMs, 256>>>(tlas, buffer, camera, rngStates, windowSize[0], windowSize[1], spp);
     checkCudaErrors(cudaDeviceSynchronize());
     bufferToSurface<<<32 * numSMs, 256>>>(surface, buffer, windowSize[0], windowSize[1]);
     checkCudaErrors(cudaDeviceSynchronize());
@@ -33,7 +34,7 @@ void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &c
 
 
 SceneBuilder &SceneBuilder::addObj(
-        const std::string &filename, const Eigen::Affine3f &tf) {
+        const std::string &filename, const Eigen::Affine3f &tf, Material material, Texture texture) {
     std::ifstream file(filename);
     if(!file.is_open()) {
         throw std::runtime_error("Could not open file " + filename);
@@ -81,22 +82,19 @@ SceneBuilder &SceneBuilder::addObj(
             }
 
 
-            trias.emplace_back(
-                    tf * faceVertices[0], tf * faceVertices[1],
-                    tf * faceVertices[2], tf.linear() * faceNormals[0],
-                    tf.linear() * faceNormals[1], tf.linear() * faceNormals[2]);
+            trias.emplace_back(faceVertices[0], faceVertices[1], faceVertices[2],
+                               faceNormals[0], faceNormals[1], faceNormals[2]);
         }
     }
-    for(const auto &t: trias) {
-        addTriangle(t);
-    }
+
+    meshes.push_back({trias, tf, material, texture});
     return *this;
 }
 
-SceneBuilder &SceneBuilder::addTriangle(const Triangle &triangle) {
-    triangles.push_back(triangle);
-    return *this;
-}
+//SceneBuilder &SceneBuilder::addTriangle(const Triangle &triangle) {
+//    triangles.push_back(triangle);
+//    return *this;
+//}
 
 
 SceneBuilder &SceneBuilder::parseXML(
@@ -193,85 +191,23 @@ void SceneBuilder::parse_shape(const pugi::xml_node &shape, auto &logger) {
 Scene SceneBuilder::build() {
     auto scene = Scene{};
 
-    if(triangles.empty()) {
+    if(meshes.empty()) {
         std::cerr << "No geometry in scene\n";
         throw std::runtime_error("No geometry in scene");
     }
 
-    Triangle *trias;
-    checkCudaErrors(
-            cudaMallocManaged(&trias, triangles.size() * sizeof(Triangle)));
-    checkCudaErrors(cudaMemcpy(trias, triangles.data(),
-                               triangles.size() * sizeof(Triangle),
-                               cudaMemcpyHostToDevice));
 
-    std::cout << "Allocated Triangles\n";
+    //    std::cout << triangles.size() << " triangles\n";
+    //    for(const auto &t: triangles) {
+    //        blases.push_back({{t}, Eigen::Affine3f::Identity(), Material{}, Texture{}});
+    //    }
 
-    AABB boundingBox = thrust::transform_reduce(
-            thrust::device, trias, trias + triangles.size(),
-            [=] __host__ __device__(const Triangle &t) -> AABB {
-                return t.AABBGetter();
-            },
-            AABB{}, thrust::plus<AABB>());
+    //TODO cleanup
+    TLAS *t;
+    checkCudaErrors(cudaMallocManaged(&t, sizeof(TLAS)));
+    *t = TLAS(meshes);
 
-    std::cout << "Scene Bounding Box: Min\n"
-              << boundingBox.min << "\nMax\n"
-              << boundingBox.max << '\n';
-
-    Eigen::Vector3f lower = boundingBox.min;
-    Eigen::Vector3f dims = boundingBox.max - boundingBox.min;
-
-    thrust::device_vector<uint32_t> mortonCodes(triangles.size());
-    thrust::transform(
-            thrust::device, trias, trias + triangles.size(), mortonCodes.begin(),
-            [=] __host__ __device__(const Triangle &tria) {
-                int numBits = 10;
-                const Eigen::Vector3f normalized =
-                        static_cast<float>(1u << numBits) *
-                        (tria.AABBGetter().getCenter() - lower).array() / dims.array();
-
-                assert(normalized[0] >= 0 && normalized[1] >= 0 &&
-                       normalized[2] >= 0);
-                assert(normalized[0] <= (1u << numBits) &&
-                       normalized[1] <= (1u << numBits) &&
-                       normalized[2] <= (1u << numBits));
-
-                return (LeftShift3(static_cast<uint32_t>(normalized[2])) << 2) |
-                       (LeftShift3(static_cast<uint32_t>(normalized[1])) << 1) |
-                       (LeftShift3(static_cast<uint32_t>(normalized[0])));
-            });
-
-    thrust::sort_by_key(thrust::device, mortonCodes.begin(), mortonCodes.end(),
-                        trias);
-
-    std::cout << "Sorted " << triangles.size() << " Triangles by Morton Code\n";
-    BVH *bvh;
-    AccelerationNode *bvhNodes;
-
-    checkCudaErrors(cudaMallocManaged(&bvh, sizeof(BVH)));
-    checkCudaErrors(cudaMallocManaged(
-            &bvhNodes, 2 * triangles.size() * sizeof(AccelerationNode)));
-
-    unsigned short int *bvhConstructionDone;
-    checkCudaErrors(
-            cudaMallocManaged(&bvhConstructionDone,
-                              (triangles.size() - 2) * sizeof(unsigned short int)));
-
-    auto start = std::chrono::high_resolution_clock::now();
-    // TODO grid stride loop or tune sizes
-    constructBVH<<<(triangles.size() + 255) / 256, 256>>>(
-            bvhNodes, trias, triangles.size(), mortonCodes.data().get(),
-            bvhConstructionDone);
-
-    checkCudaErrors(cudaDeviceSynchronize());
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::high_resolution_clock::now() - start);
-
-    std::cout << "Built BVH in " << duration.count() << "ms\n";
-
-    *bvh = BVH{bvhNodes};
-
-    scene.bvh = bvh;
+    scene.tlas = t;
 
 
     return scene;
@@ -439,7 +375,7 @@ Eigen::Vector3f SceneBuilder::parseVector(std::string str) const {
 }
 SceneBuilder &SceneBuilder::getSensors(std::vector<Sensor> &s) {
     s.resize(this->sensors.size());
-    for(int i = 0; i < s.size(); i++) {
+    for(unsigned int i = 0; i < s.size(); i++) {
         s[i] = this->sensors[i];
     }
     return *this;
@@ -460,15 +396,6 @@ void SceneBuilder::parse_default(const pugi::xml_node &node, auto &logger) {
     }
 }
 
-
-__device__ __host__ constexpr uint32_t LeftShift3(uint32_t x) noexcept {
-    if(x == (1 << 10)) --x;
-    x = (x | (x << 16)) & 0b00000011000000000000000011111111;
-    x = (x | (x << 8)) & 0b00000011000000001111000000001111;
-    x = (x | (x << 4)) & 0b00000011000011000011000011000011;
-    x = (x | (x << 2)) & 0b00001001001001001001001001001001;
-    return x;
-}
 
 ScopedLogger::~ScopedLogger() {
     formatter.dedent();
