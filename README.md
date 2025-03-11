@@ -35,8 +35,8 @@ In order to see the video in 3D, cross your eyes to overlap the images.
 
 - Materials
     - [X] Diffuse
-    - [ ] Specular
-    - [ ] Transparent
+    - [X] Specular
+    - [X] Transparent
     - [ ] Emissive
     - [ ] Textures
     - [ ] Bump Mapping
@@ -56,7 +56,7 @@ In order to see the video in 3D, cross your eyes to overlap the images.
     - [ ] Sphere
     - [ ] Plane
     - [ ] Mesh
-    - [ ] Instancing
+    - [X] Instancing
 - Acceleration
     - [X] BVH
         - [X] Geometry
@@ -65,7 +65,7 @@ In order to see the video in 3D, cross your eyes to overlap the images.
     - [ ] Octree
     - [ ] Tagged Pointers
     - [ ] No Megakernels
-    - [ ] TLAS / BLAS
+    - [X] TLAS / BLAS
 - Denoising
     - [ ] Bilateral Filter
     - [ ] Non-Local Means
