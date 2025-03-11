@@ -19,7 +19,7 @@ or `make -j N` to make use of N threads
 
 The renderer launches a graphical interface that displays various elements of the scene.
 
-![Renderer GUI](renders/ui.png)
+![Renderer GUI](renders/demo_car.png)
 
 ## Examples
 
@@ -27,7 +27,7 @@ In order to create a 3D effect without use of glasses, the renderer can be used 
 rendering the scene from two slightly different perspectives. The following example shows a dragon model rendered in
 stereoscopic mode with moving cameras.
 
-![Stereoscopic video](renders/demo_dragon_stereoscopic.gif)
+[![Stereoscopy Example](renders/stereoscopic_car.gif)](https://www.youtube.com/watch?v=Ew53lIL2Aas)
 
 In order to see the video in 3D, cross your eyes to overlap the images.
 

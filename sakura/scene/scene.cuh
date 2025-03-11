@@ -25,6 +25,7 @@ class Scene {
 
 public:
     void render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &camera, curandState *rngStates, const Eigen::Vector2<unsigned int> &windowSize, int spp) const;
+    AABB getBoundingBox() const { return tlas->getBoundingBox(); };
 
 private:
     friend class SceneBuilder;
@@ -80,7 +81,8 @@ public:
 
     // Load scene component from file
     SceneBuilder &parseXML(const std::string &filename) noexcept(false);
-    SceneBuilder &addObj(const std::string &filename, const Eigen::Affine3f &tf = Eigen::Affine3f::Identity(), Material material = Material(), Texture texture = Texture());
+    SceneBuilder &addObj(const std::string &filename, const Eigen::Affine3f &tf = Eigen::Affine3f::Identity(), BSDF bsdf = {});
+    SceneBuilder &addRectangle(const Eigen::Affine3f &tf, BSDF bsdf = {});
 
     // Directly add Components
     //    SceneBuilder &addTriangle(const Triangle &triangle);
@@ -99,6 +101,7 @@ private:
     void parse_shape(const pugi::xml_node &shape, auto &logger);
     void parse_sensor(const pugi::xml_node &sensor, auto &logger);
     void parse_default(const pugi::xml_node &node, auto &logger);
+    void parse_bsdf(const pugi::xml_node &bsdf, auto &logger);
 
     // Prepare the XML file for parsing
     // returns document and document root
@@ -107,10 +110,11 @@ private:
     void xmlChildIterator(const pugi::xml_node &node, auto func) const;
 
     Eigen::Isometry3f parseTransform(const pugi::xml_node &node, auto logger) const;
-    Eigen::Vector3f parseVector(std::string str) const;
+    static Eigen::Vector3f parseVector(std::string str);
 
     [[nodiscard]] std::string lookupName(const std::string &name) const;
     std::unordered_map<std::string, std::string> nameMap;
+    std::unordered_map<std::string, BSDF> bsdfMap;
 
     std::vector<MeshDescriptorHost> meshes;
     std::vector<Sensor> sensors;

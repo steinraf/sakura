@@ -45,8 +45,8 @@ __device__ __host__ AccelerationNode::AccelerationNode(Triangle *triangle,
     assert(isLeaf);
 }
 
-__device__ __host__ BVH::BVH(AccelerationNode *root) noexcept
-    : root(root) {}
+__device__ __host__ BVH::BVH(AccelerationNode *root, AABB boundingBox) noexcept
+    : root(root), boundingBox(std::move(boundingBox)) { assert(!this->boundingBox.isFaulty()); }
 
 [[nodiscard]] __device__ bool BVH::intersect(const Ray &ray, Intersection &its,
                                              bool isShadowRay) const noexcept {
@@ -107,6 +107,9 @@ __device__ __host__ BVH::BVH(AccelerationNode *root) noexcept
     closestTriangle->hitInformationSetter(currentRay, its);
 
     return true;
+}
+AABB BVH::getBoundingBox() const noexcept {
+    return boundingBox;
 }
 
 
@@ -294,8 +297,6 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
                                triangles.size() * sizeof(Triangle),
                                cudaMemcpyHostToDevice));
 
-    std::cout << "Allocated Triangles\n";
-
     AABB boundingBox = thrust::transform_reduce(
             thrust::device, trias, trias + triangles.size(),
             [=] __host__ __device__(const Triangle &t) -> AABB {
@@ -303,9 +304,6 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
             },
             AABB{}, thrust::plus<AABB>());
 
-    std::cout << "Scene Bounding Box: Min\n"
-              << boundingBox.min << "\nMax\n"
-              << boundingBox.max << '\n';
 
     //TODO have collection of all these kinds of constants
     constexpr float EPSILON = 1e-6f;
@@ -337,7 +335,6 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
     thrust::sort_by_key(thrust::device, mortonCodes.begin(), mortonCodes.end(),
                         trias);
 
-    std::cout << "Sorted " << triangles.size() << " Triangles by Morton Code\n";
     BVH *bvh;
     AccelerationNode *bvhNodes;
 
@@ -360,9 +357,11 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::high_resolution_clock::now() - start);
 
+#ifndef NDEBUG
     std::cout << "Built BVH in " << duration.count() << "ms\n";
-
-    *bvh = BVH{bvhNodes};
+#endif
+    
+    *bvh = BVH{bvhNodes, boundingBox};
 
     return bvh;
 }

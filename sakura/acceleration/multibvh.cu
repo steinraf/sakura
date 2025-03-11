@@ -14,25 +14,16 @@ __device__ bool BLAS::intersect(Ray ray, Intersection &its, bool isShadowRay) co
     //WORKS                                         return EXTREMELY_FALSE;
     return bvh->intersect(ray, its, isShadowRay);
 }
-BLAS::BLAS(const std::vector<Triangle> &triangles, const Eigen::Affine3f &transform) noexcept : bvh(nullptr), inverseTransform(transform.inverse()) {
+BLAS::BLAS(const MeshDescriptorHost &meshDescriptor) noexcept : bsdf(meshDescriptor.bsdf), bvh(nullptr), inverseTransform(meshDescriptor.transform.inverse()) {
     //TODO make all BVHs contiguous in memory
 
+    bvh = getBVH(meshDescriptor.triangles);
 
-    //    checkCudaErrors(cudaMallocManaged(&bvh, sizeof(BVH)));
 
-    bvh = getBVH(triangles);
-
-    std::cout << "Allocated BVH at " << bvh << std::endl;
     assert(bvh);
 }
-
-BLAS::~BLAS() {
-    std::cout << "Starting BLAS destruct\n";
-    //    if(bvh) {
-    //        std::cout << "Freeing BVH " << bvh << "\n";
-    //        checkCudaErrors(cudaFree(bvh));
-    //    }
-    std::cout << "Destructed BLAS\n";
+__host__ __device__ AABB BLAS::getBoundingBox() const noexcept {
+    return bvh->getBoundingBox();
 }
 
 __device__ bool TLAS::intersect(const Ray &_ray, Intersection &its, bool isShadowRay) const noexcept {
@@ -42,23 +33,42 @@ __device__ bool TLAS::intersect(const Ray &_ray, Intersection &its, bool isShado
     for(size_t i = 0; i < numBlas; ++i) {
         assert(i < numBlas);
         if(blas[i].intersect(ray, its, isShadowRay)) {
-
             if(isShadowRay) return true;
             hit = true;
             ray.maxDist = its.t;
+            its.mesh = &blas[i];
         }
     }
     return hit;
 }
+
+AABB getTLASAABB(BLAS *start, size_t count) {
+    AABB boundingBox = thrust::transform_reduce(
+            thrust::device, start, start + count,
+            [=] __host__ __device__(const BLAS &b) -> AABB {
+                return b.getBoundingBox();
+            },
+            AABB{}, thrust::plus<AABB>());
+
+    std::cout << "Bounding Box: " << boundingBox.min << " " << boundingBox.max << std::endl;
+
+    return boundingBox;
+}
+
+
 __host__ TLAS::TLAS(const std::vector<MeshDescriptorHost> &blases) noexcept : blas(nullptr), numBlas(blases.size()) {
     assert(numBlas > 0);
     checkCudaErrors(cudaMallocManaged(&blas, numBlas * sizeof(BLAS)));
+    boundingBox = {};
     for(size_t i = 0; i < numBlas; ++i) {
-        std::cout << "Initializing BLAS " << i << " at " << blas + i << std::endl;
-        blas[i] = BLAS{blases[i].triangles, blases[i].transform};
-        std::cout << "Initialized BLAS " << i << " at " << blas + i << std::endl;
+        blas[i] = BLAS{blases[i]};
+        boundingBox = boundingBox + blas[i].getBoundingBox();
     }
-    std::cout << "Initialized TLAS with " << numBlas << " BLASes at " << blas << std::endl;
+
+    //    AABB boundingBox = getTLASAABB(blas, numBlas);
+    std::cout << "Initialized TLAS with " << numBlas << " BLASes and bounding box " << boundingBox.min << " => " << boundingBox.max << '\n';
+
+
     checkCudaErrors(cudaDeviceSynchronize());
     assert(blas);
 }

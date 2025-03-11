@@ -105,11 +105,14 @@ __host__ __device__ void Triangle::hitInformationSetter(
 
     its.uv = {u, v};
 
-    its.normal = Eigen::Vector3f{bary[0] * n0 + bary[1] * n1 + bary[2] * n2};
+
+    Vec3f normal = Eigen::Vector3f{bary[0] * n0 + bary[1] * n1 + bary[2] * n2};
 
     //Flip normal if it is facing away from the ray
-    if(its.normal.dot(r.dir) > 0) {
-        its.normal = -its.normal;
+    if(normal.dot(r.dir) > 0) {
+        its.shFrame = Frame(-normal);
+    } else {
+        its.shFrame = Frame(normal);
     }
 
     its.triangle = this;

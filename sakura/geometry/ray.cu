@@ -14,6 +14,5 @@ __host__ __device__ Eigen::Vector3f Ray::at(float t) const noexcept {
 }
 __host__ __device__ void Ray::transform(const Eigen::Affine3f &transform) noexcept {
     origin = transform * origin;
-    dir = transform.rotation() * dir;
-    assert(dir.norm() > 1 - RAY_EPSILON && dir.norm() < 1 + RAY_EPSILON);
+    dir = transform.linear() * dir;// No normalization because t should not be affected
 }

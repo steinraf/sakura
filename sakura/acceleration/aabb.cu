@@ -100,7 +100,7 @@ AABB::operator+(const AABB &other) const noexcept {
     return out;
 }
 __host__ __device__ bool AABB::isFaulty() const noexcept {
-
+    
     const auto diff = max - min;
 
     // If any component is less than 0, the AABB is faulty

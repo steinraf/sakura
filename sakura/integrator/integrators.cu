@@ -6,6 +6,7 @@
 #include "../camera/camera.cuh"
 #include "../geometry/intersection.cuh"
 #include "../gui/viewport.cuh"
+#include "../material/bsdf.cuh"
 #include "../rng/sampler.cuh"
 #include "integrators.cuh"
 
@@ -15,7 +16,13 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
                             unsigned int width, unsigned int height, int spp) {
 
 
-    constexpr int maxBounces = 5;
+    constexpr int maxBounces = 16;
+
+    if(blockIdx.x * blockDim.x + threadIdx.x == 0) {
+        Sampler sampler{&rngStates[0]};
+        tlas->shuffleTfs(sampler);
+    }
+    __syncthreads();
 
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
         pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
@@ -60,7 +67,7 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
                     }
                     break;
                 } else if(numBounces == 0) {
-                    buffer->normal[pixelIndex].addElement(intersection.normal);
+                    buffer->normal[pixelIndex].addElement(intersection.shFrame.n);
                     buffer->position[pixelIndex].addElement(intersection.point);
                     //                    buffer->albedo[pixelIndex].addElement(intersection.material->albedo);
                     buffer->uv[pixelIndex].addElement(Eigen::Vector3f{intersection.uv[0], intersection.uv[1], 0.0});
@@ -76,11 +83,15 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
 
                 t.array() /= successProbability;
 
-                t.array() *= 0.8;// BSDF
+                BSDFQueryRecord bsdfQueryRecord{intersection.shFrame.toLocal(-currentRay.dir)};
+                auto bsdfSample = intersection.mesh->bsdf.sample(bsdfQueryRecord, sampler.getSample2D());
+
+
+                t.array() *= bsdfSample.array();// BSDF
 
                 currentRay = Ray{
-                        intersection.point + intersection.normal * RAY_EPSILON,
-                        sample::uniformHemisphere(sampler, intersection.normal)};
+                        intersection.point,
+                        intersection.shFrame.toWorld(bsdfQueryRecord.wOut)};
 
                 ++numBounces;
             }

@@ -27,14 +27,25 @@ public:
     EMeasure measure = EMeasure::EUnknownMeasure;
 
     __host__ __device__ BSDFQueryRecord() = default;
+    __host__ __device__ BSDFQueryRecord(Vec3f v) : wIn(v), wOut(v) {}
 
 private:
 };
 
 class BSDF {
 public:
+    explicit BSDF(Material material, Texture texture);
+    BSDF() = default;
+    BSDF(const BSDF &other) = default;
+    BSDF(BSDF &&other) = default;
+    BSDF &operator=(const BSDF &other) = default;
+    BSDF &operator=(BSDF &&other) = default;
+    ~BSDF() = default;
+
     [[nodiscard]] __host__ __device__ Color eval(const BSDFQueryRecord &query) const noexcept;
     [[nodiscard]] __host__ __device__ float pdf(const BSDFQueryRecord &query) const noexcept;
+
+    [[nodiscard]] __device__ Color sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &sample) const noexcept;
 
 private:
     Material material;

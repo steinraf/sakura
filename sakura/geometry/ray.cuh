@@ -19,6 +19,6 @@ struct Ray {
 
 
     Eigen::Vector3f origin;
-    Eigen::Vector3f dir;
+    Eigen::Vector3f dir;// Not necessarily unit vector (https://pbr-book.org/4ed/Shapes/Basic_Shape_Interface#IntersectionCoordinateSpaces)
     float minDist, maxDist;
 };

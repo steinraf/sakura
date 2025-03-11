@@ -102,7 +102,7 @@ private:
     int samplesPerPixel;
 
     float t = 0.0;
-    const float dt = 0.01;
+    float dt = 0.01;
 };
 
 

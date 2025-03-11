@@ -67,14 +67,17 @@ struct AccelerationNode {
 class BVH {
 private:
     AccelerationNode *root;
+    AABB boundingBox;
 
 public:
-    __device__ __host__ explicit BVH(AccelerationNode *root) noexcept;
+    __device__ __host__ explicit BVH(AccelerationNode *root, AABB boundingBox) noexcept;
 
 
     [[nodiscard]] __device__ bool intersect(
             const Ray &ray, Intersection &its,
             bool isShadowRay = false) const noexcept;
+
+    [[nodiscard]] AABB getBoundingBox() const noexcept;
 };
 
 // The findSplit, delta and determineRange are taken from here

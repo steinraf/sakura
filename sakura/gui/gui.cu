@@ -128,6 +128,15 @@ struct FunctorIdentity {
     }
 };
 
+struct FunctorBounded {
+    const Eigen::Array3f min;
+    const Eigen::Array3f extent;
+    explicit FunctorBounded(const AABB &bb) : min(bb.min.array()), extent((bb.max - bb.min).array()) {}
+    __device__ Eigen::Vector3f operator()(const Eigen::Vector3f &vec) const {
+        return (vec.array() - min) / extent;
+    }
+};
+
 void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
 
     std::cout << "Initializing GUI loop\n";
@@ -136,35 +145,39 @@ void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
 
     if(sensors.size() != 1) {
         std::cerr << "Only 1 sensor can be loaded from a file\n";
-        exit(1);
+        std::cerr << "Truncating sensors and continuing\n";
+        sensors.resize(1);
     }
-
+    //
     static constexpr float eyeWidth = 0.1;
 
     const auto width = sensors[0].film.size[0];
     const auto height = sensors[0].film.size[1];
 
-    auto vp = std::make_shared<OpenGLViewport>(scene, width, height, "Raw Output", sensors[0].camera);
+
+    Camera cam = sensors[0].camera;
+
+    auto vp = std::make_shared<OpenGLViewport>(scene, width, height, "Raw Output", cam);
 
     //    viewports.push_back(std::make_shared<Denoiser>(vp->getFeatureBuffer(), width, height, "Denoised Output"));
     viewports.push_back(vp);
 
-    //    camTf.translate(Eigen::Vector3f{eyeWidth, 0, 0});
-    //    viewports.emplace_back(std::make_shared<OpenGLViewport>(scene, width, height, "Offset Viewport", Camera{camTf, 35, 1.0f, 0.01, 30.0}));
+    cam.translate(Eigen::Vector3f{eyeWidth, 0, 0});
+    auto vpClone = std::make_shared<OpenGLViewport>(scene, width, height, "Offset Viewport", cam);
+    viewports.emplace_back(vpClone);
 
-    viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
-    viewports.push_back(std::make_shared<BufferVisualizer<FunctorPositive, BUFFERTYPE::SAMPLEVARIANCE>>(vp->getFeatureBuffer()->color, "Color Buffer Sample Variance", width, height, FunctorPositive{}));
-
+    //    viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
+    //    viewports.push_back(std::make_shared<BufferVisualizer<FunctorPositive, BUFFERTYPE::SAMPLEVARIANCE>>(vp->getFeatureBuffer()->color, "Color Buffer Sample Variance", width, height, FunctorPositive{}));
+    //    viewports.push_back(std::make_shared<BufferVisualizer<FunctorBounded, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->position, "Position Buffer", width, height, FunctorBounded{scene.getBoundingBox()}));
 
     constexpr unsigned int MAX_SIZE = 4;
     assert(viewports.size() <= MAX_SIZE && "Only 4 viewports supported");
     std::cout << "Starting GUI loop\n";
 
     float t = 0.0;
-    const float dt = 0.01;
+    const float dt = 0.01;// todo account for lag
 
     while(!glfwWindowShouldClose(window)) {
-
 
         glfwPollEvents();
 
@@ -316,7 +329,6 @@ void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
         t += dt;
 
         auto diff = dt - durationRender;
-
 
         if(diff > 0) {
             std::cout << "Sleeping for " << diff << " ms\n";

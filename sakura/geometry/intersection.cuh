@@ -3,18 +3,9 @@
 //
 
 #pragma once
+#include "../common.cuh"
 #include <Eigen/Dense>
 
-struct Intersection {
-    Eigen::Vector3f point;
-    Eigen::Vector3f normal;
-
-    Eigen::Vector2f uv;
-    float t;
-
-    const class Triangle *triangle;
-    const class Mesh *mesh;
-};
 
 // Taken from Nori
 class Frame {
@@ -23,6 +14,9 @@ private:
 
 public:
     Eigen::Vector3f n;
+
+    __host__ __device__ Frame() noexcept
+        : Frame({0.0, 1.0, 0.0}) {}
 
     __host__ __device__ explicit Frame(const Eigen::Vector3f &nIn) noexcept
         : n(nIn.normalized()) {
@@ -57,4 +51,16 @@ public:
     __host__ __device__ static inline float cosTheta(const Eigen::Vector3f &v) noexcept {
         return v[2];
     }
+};
+
+
+struct Intersection {
+    Eigen::Vector3f point;
+    Frame shFrame;// Shading frame
+
+    Eigen::Vector2f uv;
+    float t;
+
+    const Triangle *triangle;
+    const BLAS *mesh;
 };

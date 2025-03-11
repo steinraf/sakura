@@ -10,6 +10,7 @@
 // Forward declarations
 
 struct AABB;
+class BSDF;
 class BLAS;
 struct BSDFQueryRecord;
 class BVH;

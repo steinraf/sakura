@@ -124,17 +124,22 @@ void OpenGLViewport::render() {
 
 
     t += dt;
-    //    float circleScale = 1.0;
-    //    translateCamera(dt * Eigen::Vector3f{circleScale * std::sin(t), 0.0, circleScale * std::cos(t)});
+    float circleScale = 20.0;
+    float circleSpeed = 2.0;
+
+    translateCamera(dt * Eigen::Vector3f{circleScale * std::sin(t * circleSpeed), 0.0, circleScale * std::cos(t * circleSpeed)});
 
     handleUserInput();
 
     ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
-                                                                        //    ImGui::SetWindowSize(size);
 
+    auto start = std::chrono::high_resolution_clock::now();
 
     scene.render(surface, featureBuffer, camera, rngStates, size, samplesPerPixel);
 
+    checkCudaErrors(cudaDeviceSynchronize());
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count();
+    //    dt = duration / 1000.0;
 
     glClear(GL_COLOR_BUFFER_BIT);
     glBindTexture(GL_TEXTURE_2D, texture);

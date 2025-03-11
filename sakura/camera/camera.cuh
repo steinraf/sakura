@@ -15,7 +15,7 @@ public:
     __host__ __device__ Camera(Eigen::Isometry3f tf, float fov,
                                float aspectRatio, float aperture,
                                float focusDist, float near = 0.1f,
-                               float far = 100.0f) noexcept;
+                               float far = 10000.0f) noexcept;
 
     __host__ __device__ static Eigen::Isometry3f lookAt(const Eigen::Vector3f &center, const Eigen::Vector3f &lookAt, const Eigen::Vector3f &up);
 
@@ -53,10 +53,10 @@ private:
     Eigen::Isometry3f tf = Eigen::Isometry3f::Identity();
     float fov = 45.f;
     float aspectRatio = 16.f / 9.f;
-    float aperture = 0.0;
+    float aperture = 0.001;
     float focusDist = 1.0;
-    float near = 0.1;
-    float far = 100.0;
+    float near = 0.01;
+    float far = 10000.0;
 };
 
 enum class FilmFormat {

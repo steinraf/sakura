@@ -30,7 +30,6 @@ private:
     bool fullscreen;
     GLFWwindow *window;
 
-
     const std::string applicationTitle = "Sakura";
     const std::string settingsTitle = "Settings";
 };

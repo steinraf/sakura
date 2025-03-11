@@ -2,10 +2,111 @@
 // Created by steinraf on 26.02.25.
 //
 
+#include "../geometry/intersection.cuh"
+#include "../rng/sampler.cuh"
 #include "bsdf.cuh"
+
+//Nori Fresnel Term
+[[nodiscard]] __device__ constexpr float fresnel(float cosThetaI, float extIOR, float intIOR) noexcept {
+    float etaI = extIOR, etaT = intIOR;
+
+    if(extIOR == intIOR)
+        return 0.0f;
+
+    /* Swap the indices of refraction if the interaction starts
+   at the inside of the object */
+    if(cosThetaI < 0.0f) {
+        cuda::std::swap(etaI, etaT);
+        cosThetaI = -cosThetaI;
+    }
+
+    /* Using Snell's law, calculate the squared sine of the
+   angle between the normal and the transmitted ray */
+    float eta = etaI / etaT,
+          sinThetaTSqr = eta * eta * (1 - cosThetaI * cosThetaI);
+
+    if(sinThetaTSqr > 1.0f)
+        return 1.0f; /* Total internal reflection! */
+
+    float cosThetaT = std::sqrt(1.0f - sinThetaTSqr);
+
+    float Rs = (etaI * cosThetaI - etaT * cosThetaT) / (etaI * cosThetaI + etaT * cosThetaT);
+    float Rp = (etaT * cosThetaI - etaI * cosThetaT) / (etaT * cosThetaI + etaI * cosThetaT);
+
+    return (
+                   Rs * Rs +
+                   Rp * Rp) /
+           2.0f;
+}
+
 __host__ __device__ Color BSDF::eval(const BSDFQueryRecord &query) const noexcept {
     return material.eval(texture, query);
 }
 __host__ __device__ float BSDF::pdf(const BSDFQueryRecord &query) const noexcept {
     return material.pdf(query);
+}
+BSDF::BSDF(Material material, Texture texture) : material(material), texture(texture) {
+}
+__device__ Color BSDF::sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &randomSample) const noexcept {
+    switch(material.type) {
+        case MaterialType::DIFFUSE:
+            if(Frame::cosTheta(bsdfQueryRecord.wIn) <= 0)
+                return Color::Zero();
+
+            bsdfQueryRecord.measure = EMeasure::ESolidAngle;
+
+            bsdfQueryRecord.wOut = sample::squareToCosineHemisphere(randomSample);
+
+            bsdfQueryRecord.eta = 1.0f;
+
+            return texture.eval(bsdfQueryRecord.uv);
+        case MaterialType::SPECULAR:
+            if(Frame::cosTheta(bsdfQueryRecord.wIn) <= 0)
+                return Color::Zero();
+
+            bsdfQueryRecord.wOut = Vec3f{
+                    -bsdfQueryRecord.wIn[0],
+                    -bsdfQueryRecord.wIn[1],
+                    bsdfQueryRecord.wIn[2]};
+            bsdfQueryRecord.measure = EMeasure::EDiscrete;
+
+            bsdfQueryRecord.eta = 1.0f;
+
+            return Color::Ones();
+        case MaterialType::DIELECTRIC:
+            float extIOR = material.iorExterior(), intIOR = material.iorInterior(), cosThetaI = Frame::cosTheta(bsdfQueryRecord.wIn);
+            Vec3f normal{0.f, 0.f, 1.f};
+            if(Frame::cosTheta(bsdfQueryRecord.wIn) < 0) {
+                extIOR = intIOR;
+                intIOR = extIOR;
+                cosThetaI *= -1;
+                normal *= -1;
+            }
+
+
+            const float fresnelCoeff = fresnel(cosThetaI, extIOR, intIOR);
+
+            bsdfQueryRecord.measure = EMeasure::EDiscrete;
+
+            if(randomSample[0] < fresnelCoeff) {
+                bsdfQueryRecord.eta = 1.f;
+
+                bsdfQueryRecord.wOut = Vec3f(
+                        -bsdfQueryRecord.wIn[0],
+                        -bsdfQueryRecord.wIn[1],
+                        bsdfQueryRecord.wIn[2]);
+
+                return Color::Ones();
+
+            } else {
+                bsdfQueryRecord.eta = extIOR / intIOR;
+
+                bsdfQueryRecord.wOut =
+                        -bsdfQueryRecord.eta * (bsdfQueryRecord.wIn - (bsdfQueryRecord.wIn.dot(normal) * normal)) - normal * sqrt(1 - bsdfQueryRecord.eta * bsdfQueryRecord.eta * (1 - bsdfQueryRecord.wIn[2] * bsdfQueryRecord.wIn[2]));
+
+                return Color{bsdfQueryRecord.eta * bsdfQueryRecord.eta,
+                             bsdfQueryRecord.eta * bsdfQueryRecord.eta,
+                             bsdfQueryRecord.eta * bsdfQueryRecord.eta};
+            }
+    }
 }

@@ -34,7 +34,7 @@ void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &c
 
 
 SceneBuilder &SceneBuilder::addObj(
-        const std::string &filename, const Eigen::Affine3f &tf, Material material, Texture texture) {
+        const std::string &filename, const Eigen::Affine3f &tf, BSDF bsdf) {
     std::ifstream file(filename);
     if(!file.is_open()) {
         throw std::runtime_error("Could not open file " + filename);
@@ -87,18 +87,15 @@ SceneBuilder &SceneBuilder::addObj(
         }
     }
 
-    meshes.push_back({trias, tf, material, texture});
+    meshes.push_back({trias, tf, std::move(bsdf)});
     return *this;
 }
-
-//SceneBuilder &SceneBuilder::addTriangle(const Triangle &triangle) {
-//    triangles.push_back(triangle);
-//    return *this;
-//}
 
 
 SceneBuilder &SceneBuilder::parseXML(
         const std::string &filename) noexcept(false) {
+
+    // TODO cleanup
 
     currentXMLRoot = std::filesystem::path{filename}.parent_path();
 
@@ -113,6 +110,7 @@ SceneBuilder &SceneBuilder::parseXML(
                     CREATE_PARSER(shape),
                     CREATE_PARSER(sensor),
                     CREATE_PARSER(default),
+                    CREATE_PARSER(bsdf),
             };
 
     xmlChildIterator(root, [&](const pugi::xml_node &node) {
@@ -165,6 +163,9 @@ void SceneBuilder::parse_shape(const pugi::xml_node &shape, auto &logger) {
 
     auto attribute = lookupName(shape.attribute("type").value());
     if(attribute == "obj") {
+        std::filesystem::path objFilename = "";
+        Eigen::Affine3f tf = Eigen::Affine3f::Identity();
+        BSDF bsdf;
 
         xmlChildIterator(shape, [&](const pugi::xml_node &node) {
             if(std::string(node.name()) == "string") {
@@ -174,13 +175,40 @@ void SceneBuilder::parse_shape(const pugi::xml_node &shape, auto &logger) {
                     throw std::runtime_error("String attribute should have name \"filename\", not " + filename);
                 }
 
-                addObj(currentXMLRoot / filename);
+                objFilename = currentXMLRoot / filename;
+
                 logger.template log<false>("FOUND OBJ " + filename);
+            } else if(std::string(node.name()) == "ref") {
+                bsdf = bsdfMap.at(node.attribute("id").value());
+                logger.template log<false>(R"(<ref id=")" + lookupName(node.attribute("id").value()) + R"("/>)");
+            } else if(std::string(node.name()) == "transform") {
+                xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                    tf = parseTransform(node, logger.getNewSection("transform"));
+                });
             } else {
-                logger.template log<true>("Ignoring XML Node " + std::string(node.name()));
+                logger.template log<true>("Ignoring Shape Node " + std::string(node.name()));
             }
         });
 
+        addObj(objFilename, tf, bsdf);
+    } else if(attribute == "rectangle") {
+        Eigen::Affine3f tf = Eigen::Affine3f::Identity();
+        BSDF bsdf;
+
+        xmlChildIterator(shape, [&](const pugi::xml_node &node) {
+            if(std::string(node.name()) == "ref") {
+                bsdf = bsdfMap.at(node.attribute("id").value());
+                logger.template log<false>(R"(<ref id=")" + lookupName(node.attribute("id").value()) + R"("/>)");
+            } else if(std::string(node.name()) == "transform") {
+                xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                    tf = parseTransform(node, logger.getNewSection("transform"));
+                });
+            } else {
+                logger.template log<true>("Ignoring Shape Node " + std::string(node.name()));
+            }
+        });
+
+        addRectangle(tf, bsdf);
 
     } else {
         logger.template log<true>("Ignoring shape due to attribute " + attribute);
@@ -195,12 +223,6 @@ Scene SceneBuilder::build() {
         std::cerr << "No geometry in scene\n";
         throw std::runtime_error("No geometry in scene");
     }
-
-
-    //    std::cout << triangles.size() << " triangles\n";
-    //    for(const auto &t: triangles) {
-    //        blases.push_back({{t}, Eigen::Affine3f::Identity(), Material{}, Texture{}});
-    //    }
 
     //TODO cleanup
     TLAS *t;
@@ -251,8 +273,9 @@ void SceneBuilder::parse_sensor(const pugi::xml_node &sensor, auto &logger) {
                 cameraBuilder.setFOV(value);
                 logger.template log<false>("<float name=\"fov\" value=\"" + std::to_string(value) + "\"/>");
             } else if(name == "aspectRatio") {
-                cameraBuilder.setAspectRatio(value);
-                logger.template log<false>("<float name=\"aspectRatio\" value=\"" + std::to_string(value) + "\"/>");
+                logger.template log<true>("ASPECT RATIO CAN NOT BE SET MANUALLY");
+                //cameraBuilder.setAspectRatio(value);
+                //logger.template log<false>("<float name=\"aspectRatio\" value=\"" + std::to_string(value) + "\"/>");
             } else if(name == "aperture") {
                 cameraBuilder.setAperture(value);
                 logger.template log<false>("<float name=\"aperture\" value=\"" + std::to_string(value) + "\"/>");
@@ -322,7 +345,14 @@ void SceneBuilder::parse_sensor(const pugi::xml_node &sensor, auto &logger) {
         }
     });
 
+    cameraBuilder.setAspectRatio(float(s.film.size[0]) / float(s.film.size[1]));
+
+
     s.camera = cameraBuilder.build();
+
+    logger.template log<false>("=> AspectRatio: " + std::to_string(float(s.film.size[0]) / float(s.film.size[1])));
+
+
     sensors.push_back(s);
 }
 Eigen::Isometry3f SceneBuilder::parseTransform(const pugi::xml_node &node, auto logger) const {
@@ -364,7 +394,7 @@ Eigen::Isometry3f SceneBuilder::parseTransform(const pugi::xml_node &node, auto 
 
     return tf;
 }
-Eigen::Vector3f SceneBuilder::parseVector(std::string str) const {
+Eigen::Vector3f SceneBuilder::parseVector(std::string str) {
     std::replace(str.begin(), str.end(), ',', ' ');
     std::istringstream stream{str};
     Eigen::Vector3f vec;
@@ -394,6 +424,120 @@ void SceneBuilder::parse_default(const pugi::xml_node &node, auto &logger) {
     } else {
         logger.template log<true>("Too many attributes in default " + std::string(node.name()) + ". Ignoring.");
     }
+}
+void SceneBuilder::parse_bsdf(const pugi::xml_node &bsdf, auto &logger) {
+    std::string id = bsdf.attribute("id").value();
+    logger.template log<false>("id=\"" + id + "\"");
+    if(std::string(bsdf.attribute("type").value()) == "twosided") {
+        logger.template log<false>(R"(type="twosided")");
+        xmlChildIterator(bsdf, [&](const pugi::xml_node &node) {
+            if(std::string(node.name()) == "bsdf") {
+                if(std::string(node.attribute("type").value()) == "diffuse") {
+                    xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                        if(std::string(node.name()) == "rgb") {
+                            if(std::string(node.attribute("name").value()) == "reflectance") {
+                                Eigen::Vector3f color = parseVector(node.attribute("value").value());
+                                bsdfMap[id] = BSDF{Material{MaterialType::DIFFUSE}, Texture{color}};
+                                logger.template log<false>(R"(<rgb name="reflectance" value=")" + (std::ostringstream{} << color.matrix()).str() + "\"/>");
+                            } else {
+                                logger.template log<true>("Ignoring RGB " + std::string(node.attribute("name").value()));
+                            }
+                        } else {
+                            logger.template log<true>("Ignoring BSDF " + std::string(node.name()));
+                        }
+                    });
+                } else if(std::string(node.attribute("type").value()) == "roughconductor") {
+                    logger.template log<false>(R"(type="roughconductor")");
+                    logger.template log<true>("Converting roughconductor BSDF to regular conductor BSDF");
+                    bsdfMap[id] = BSDF{Material{MaterialType::SPECULAR}, Texture::DEFAULT()};
+                } else if(std::string(node.attribute("type").value()) == "conductor") {
+                    logger.template log<false>(R"(type="conductor")");
+                    bsdfMap[id] = BSDF{Material{MaterialType::SPECULAR}, Texture::DEFAULT()};
+                } else if(std::string(node.attribute("type").value()) == "plastic") {
+                    logger.template log<false>(R"(type="plastic")");
+                    logger.template log<true>("Converting plastic BSDF to regular diffuse BSDF");
+                    xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                        if(std::string(node.name()) == "rgb") {
+                            if(std::string(node.attribute("name").value()) == "diffuse_reflectance") {
+                                Eigen::Vector3f color = parseVector(node.attribute("value").value());
+                                bsdfMap[id] = BSDF{Material{MaterialType::DIFFUSE}, Texture{color}};
+                                logger.template log<false>(R"(<rgb name="diffuse_reflectance" value=")" + (std::ostringstream{} << color.matrix()).str() + "\"/>");
+                            } else {
+                                logger.template log<true>("Ignoring RGB " + std::string(node.attribute("name").value()));
+                            }
+                        } else {
+                            logger.template log<true>("Ignoring BSDF " + std::string(node.name()));
+                        }
+                    });
+                } else if(std::string(node.attribute("type").value()) == "roughplastic") {
+                    logger.template log<false>(R"(type="roughplastic")");
+                    logger.template log<true>("Converting roughplastic BSDF to regular diffuse BSDF");
+                    xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                        if(std::string(node.name()) == "rgb") {
+                            if(std::string(node.attribute("name").value()) == "diffuse_reflectance") {
+                                Eigen::Vector3f color = parseVector(node.attribute("value").value());
+                                bsdfMap[id] = BSDF{Material{MaterialType::DIFFUSE}, Texture{color}};
+                                logger.template log<false>(R"(<rgb name="diffuse_reflectance" value=")" + (std::ostringstream{} << color.matrix()).str() + "\"/>");
+                            } else {
+                                logger.template log<true>("Ignoring RGB " + std::string(node.attribute("name").value()));
+                            }
+                        } else {
+                            logger.template log<true>("Ignoring BSDF " + std::string(node.name()));
+                        }
+                    });
+                } else {
+                    logger.template log<true>("Ignoring BSDF with type " + std::string(node.attribute("type").value()));
+                }
+            } else {
+                logger.template log<true>("Invalid BSDF Child Node " + std::string(node.name()));
+            }
+        });
+    } else if(std::string(bsdf.attribute("type").value()) == "bumpmap") {
+        logger.template log<false>("Recursively parsing bumpmap bsdf");
+        auto bsdfLoggerSection = logger.getNewSection("bsdf");
+        parse_bsdf(bsdf.find_child([](const pugi::xml_node &node) { return std::string(node.name()) == "bsdf"; }), bsdfLoggerSection);
+    } else if(std::string(bsdf.attribute("type").value()) == "thindielectric") {
+        logger.template log<false>(R"(type="thindielectric")");
+        logger.template log<true>("Converting thindielectric BSDF to regular dielectric BSDF");
+        float intIOR = 1.5f, extIOR = 1.0f;
+        xmlChildIterator(bsdf, [&](const pugi::xml_node &node) {
+            if(std::string(node.name()) == "float") {
+                auto name = lookupName(node.attribute("name").value());
+                auto value = std::stof(lookupName(node.attribute("value").value()));
+                if(name == "int_ior") {
+                    intIOR = value;
+                    logger.template log<false>(R"(<float name="int_ior" value=")" + std::to_string(value) + "\"/>");
+                } else if(name == "ext_ior") {
+                    extIOR = value;
+                    logger.template log<false>(R"(<float name="ext_ior" value=")" + std::to_string(value) + "\"/>");
+                } else {
+                    logger.template log<true>("Ignoring float attribute " + name);
+                }
+            } else {
+                logger.template log<true>("Ignoring XML Node " + std::string(node.name()));
+            }
+        });
+        bsdfMap[id] = BSDF{Material{MaterialType::DIELECTRIC, intIOR, extIOR}, Texture::DEFAULT()};
+    } else {
+        logger.template log<true>("Ignoring BSDF " + std::string(bsdf.attribute("type").value()));
+    }
+
+    if(id.empty()) {
+        logger.template log<true>("Warning: BSDF without id");
+    } else if(!bsdfMap.contains(id)) {
+        logger.template log<true>("Substituting BSDF with default diffuse");
+        bsdfMap[id] = BSDF{Material{MaterialType::DIFFUSE}, Texture::DEFAULT()};
+    }
+}
+SceneBuilder &SceneBuilder::addRectangle(const Eigen::Affine3f &tf, BSDF bsdf) {
+    std::vector<Triangle> trias{
+            Triangle{{-1, -1, 0}, {1, -1, 0}, {1, 1, 0}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}},
+            Triangle{{-1, -1, 0}, {1, 1, 0}, {-1, 1, 0}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}},
+    };
+
+    meshes.push_back({trias, tf, std::move(bsdf)});
+
+    return *this;
 }
 
 
