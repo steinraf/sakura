@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
     //    sensors[0].film.size = Eigen::Vector2<unsigned>{2560, 1440};
     sensors[0].camera.focusDist = 1.f;
     //    sensors[0].camera.updateLensRadius(0.6f);
-    //    return EXIT_SUCCESS;
+
 
     auto gui = GUI(false);
     gui.loop(scene, sensors);

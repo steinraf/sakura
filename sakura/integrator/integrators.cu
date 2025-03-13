@@ -4,6 +4,7 @@
 
 #include "../acceleration/multibvh.cuh"
 #include "../camera/camera.cuh"
+#include "../emitter/emitter.cuh"
 #include "../geometry/intersection.cuh"
 #include "../gui/viewport.cuh"
 #include "../material/bsdf.cuh"
@@ -18,11 +19,6 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
 
     constexpr int maxBounces = 4;
 
-    if(blockIdx.x * blockDim.x + threadIdx.x == 0) {
-        Sampler sampler{&rngStates[0]};
-        tlas->shuffleTfs(sampler);
-    }
-    __syncthreads();
 
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
         pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
@@ -36,7 +32,7 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
                                          float(y) / float(height), 0.0f};
 
         const Eigen::Vector3f backgroundColor =
-                1.0f * Eigen::Vector3f{1.0, 1.0, 1.0};
+                0.0f * Eigen::Vector3f{1.0, 1.0, 1.0};
 
         Eigen::Vector3f totalColor{0.0, 0.0, 0.0};
 
@@ -73,6 +69,19 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
                     buffer->uv[pixelIndex].addElement(Eigen::Vector3f{intersection.uv[0], intersection.uv[1], 0.0});
                 }
 
+                //                if(tlas->containsEmitters()) {
+                //                    const auto *emitter = tlas->getRandomEmitter(sampler.getSample1D());
+                //                    EmitterQueryRecord emitterQueryRecord{intersection.point};
+                //                }
+
+                if(intersection.isEmitter()) {
+                    if(intersection.shFrame.n.dot(currentRay.dir) < 0) {
+                        color.array() += t.array() * intersection.emitter->radiance.array();
+                    }
+                    //                    color.array() += t.array() * intersection.emitter->radiance.array();
+                    break;
+                }
+
 
                 // roulette
                 float successProbability = min(t.maxCoeff() * etaScale, 0.99f);
@@ -84,7 +93,7 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
                 t.array() /= successProbability;
 
                 BSDFQueryRecord bsdfQueryRecord{intersection.shFrame.toLocal(-currentRay.dir)};
-                auto bsdfSample = intersection.mesh->bsdf.sample(bsdfQueryRecord, sampler.getSample2D());
+                auto bsdfSample = intersection.meshf->bsdf.sample(bsdfQueryRecord, sampler.getSample2D());
 
 
                 t.array() *= bsdfSample.array();// BSDF

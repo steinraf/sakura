@@ -34,7 +34,7 @@ void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &c
 
 
 SceneBuilder &SceneBuilder::addObj(
-        const std::string &filename, const Eigen::Affine3f &tf, BSDF bsdf) {
+        const std::string &filename, const Eigen::Affine3f &tf, BSDF bsdf, std::optional<Vec3f> emitterRadiance) {
     std::ifstream file(filename);
     if(!file.is_open()) {
         throw std::runtime_error("Could not open file " + filename);
@@ -42,6 +42,7 @@ SceneBuilder &SceneBuilder::addObj(
 
     std::vector<Eigen::Vector3f> vertices{};
     std::vector<Eigen::Vector3f> normals{};
+    std::vector<Eigen::Vector2f> uvs{};
 
     std::vector<Triangle> trias{};
 
@@ -61,9 +62,14 @@ SceneBuilder &SceneBuilder::addObj(
             Eigen::Vector3f normal;
             line >> normal.x() >> normal.y() >> normal.z();
             normals.push_back(normal);
+        } else if(start == "vt") {
+            Eigen::Vector2f uv;
+            line >> uv.x() >> uv.y();
+            uvs.push_back(uv);
         } else if(start == "f") {
             std::array<Eigen::Vector3f, 3> faceVertices;
             std::array<Eigen::Vector3f, 3> faceNormals;
+            std::array<Eigen::Vector2f, 3> uvTextures;
 
             for(int i = 0; i < 3; i++) {
                 std::string vertex;
@@ -74,8 +80,11 @@ SceneBuilder &SceneBuilder::addObj(
                 faceVertices[i] = vertices[std::stoi(vertexIndex) - 1];
                 std::string textureIndex;
                 std::getline(vertexStream, textureIndex, '/');
-                //                uvTextures[i] = uvs[std::stoi(textureIndex) -
-                //                1];
+                if(textureIndex.empty()) {
+                    uvTextures[i] = Vec2f{i % 2, i / 2};
+                } else {
+                    uvTextures[i] = uvs[std::stoi(textureIndex) - 1];
+                }
                 std::string normalIndex;
                 std::getline(vertexStream, normalIndex, '/');
                 faceNormals[i] = normals[std::stoi(normalIndex) - 1];
@@ -83,11 +92,17 @@ SceneBuilder &SceneBuilder::addObj(
 
 
             trias.emplace_back(faceVertices[0], faceVertices[1], faceVertices[2],
-                               faceNormals[0], faceNormals[1], faceNormals[2]);
+                               faceNormals[0], faceNormals[1], faceNormals[2],
+                               uvTextures[0], uvTextures[1], uvTextures[2]);
         }
     }
 
-    meshes.push_back({trias, tf, std::move(bsdf)});
+    if(emitterRadiance.has_value()) {
+        throw std::runtime_error("Emitter Radiance not supported for OBJs");
+        emitters.push_back({trias, tf, std::move(bsdf), emitterRadiance.value()});
+    } else {
+        meshes.push_back({trias, tf, std::move(bsdf)});
+    }
     return *this;
 }
 
@@ -199,6 +214,7 @@ void SceneBuilder::parse_shape(const pugi::xml_node &shape, auto &logger) {
     } else if(attribute == "rectangle") {
         Eigen::Affine3f tf = Eigen::Affine3f::Identity();
         BSDF bsdf;
+        std::optional<Vec3f> emitterRadiance = std::nullopt;
 
         xmlChildIterator(shape, [&](const pugi::xml_node &node) {
             if(std::string(node.name()) == "ref") {
@@ -208,12 +224,30 @@ void SceneBuilder::parse_shape(const pugi::xml_node &shape, auto &logger) {
                 xmlChildIterator(node, [&](const pugi::xml_node &node) {
                     tf = parseTransform(node, logger.getNewSection("transform"));
                 });
+            } else if(std::string(node.name()) == "emitter") {
+                xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                    if(std::string(node.name()) == "rgb") {
+                        if(std::string(node.attribute("name").value()) == "radiance") {
+                            emitterRadiance = parseVector(node.attribute("value").value());
+                            logger.template log<false>(R"(<rgb name="radiance" value=")" + (std::ostringstream{} << emitterRadiance.value().matrix()).str() + "\"/>");
+                        } else {
+                            logger.template log<true>("Ignoring RGB " + std::string(node.attribute("name").value()));
+                        }
+                    } else {
+                        logger.template log<true>("Ignoring BSDF " + std::string(node.name()));
+                    }
+                });
             } else {
                 logger.template log<true>("Ignoring Shape Node " + std::string(node.name()));
             }
         });
 
-        addRectangle(tf, bsdf);
+        if(emitterRadiance.has_value()) {
+            addRectangle(tf, bsdf, emitterRadiance);
+        } else {
+            addRectangle(tf, bsdf);
+        }
+
 
     } else if(attribute == "cube") {
         Eigen::Affine3f tf = Eigen::Affine3f::Identity();
@@ -247,11 +281,14 @@ Scene SceneBuilder::build() {
         std::cerr << "No geometry in scene\n";
         throw std::runtime_error("No geometry in scene");
     }
+    if(emitters.empty()) {
+        std::cout << "WARNING: No emitters in scene\n";
+    }
 
     //TODO cleanup
     TLAS *t;
     checkCudaErrors(cudaMallocManaged(&t, sizeof(TLAS)));
-    *t = TLAS(meshes);
+    *t = TLAS(meshes, emitters);
 
     scene.tlas = t;
 
@@ -394,6 +431,9 @@ Eigen::Isometry3f SceneBuilder::parseTransform(const pugi::xml_node &node, auto 
                 matrixStream >> tf.matrix()(i, j);
             }
         }
+        if(std::string tmp; matrixStream >> tmp) {
+            throw std::runtime_error("Too many values in vector " + matrix);
+        }
         logger.template log<false>("<matrix value=\"" + (std::ostringstream{} << tf.matrix()).str() + "\"/>");
     } else if(std::string(node.name()) == "lookat") {
         Eigen::Vector3f target = -Eigen::Vector3f::UnitZ(), origin = Eigen::Vector3f::Zero(), up = Eigen::Vector3f::UnitY();
@@ -424,6 +464,10 @@ Eigen::Vector3f SceneBuilder::parseVector(std::string str) {
     Eigen::Vector3f vec;
     if(!(stream >> vec.x() >> vec.y() >> vec.z())) {
         throw std::runtime_error("Could not parse vector " + str);
+    }
+
+    if(std::string tmp; stream >> tmp) {
+        throw std::runtime_error("Too many values in vector " + str);
     }
     return vec;
 }
@@ -577,36 +621,54 @@ void SceneBuilder::parse_bsdf(const pugi::xml_node &bsdf, auto &logger) {
         bsdfMap[id] = BSDF{Material{MaterialType::DIFFUSE}, Texture::DEFAULT()};
     }
 }
-SceneBuilder &SceneBuilder::addRectangle(const Eigen::Affine3f &tf, BSDF bsdf) {
+SceneBuilder &SceneBuilder::addRectangle(const Eigen::Affine3f &tf, BSDF bsdf, std::optional<Vec3f> emitterRadiance) {
     std::vector<Triangle> trias{
-            Triangle{{-1, -1, 0}, {1, -1, 0}, {1, 1, 0}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}},
-            Triangle{{-1, -1, 0}, {1, 1, 0}, {-1, 1, 0}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}},
+            Triangle{
+                    {-1, -1, 0},
+                    {1, -1, 0},
+                    {1, 1, 0},
+                    {0, 0, 1},
+                    {0, 0, 1},
+                    {0, 0, 1},
+                    {0, 0},
+                    {1, 0},
+                    {1, 1},
+            },
+            Triangle{{-1, -1, 0}, {1, 1, 0}, {-1, 1, 0}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0}, {1, 1}, {0, 1}},
     };
 
-    meshes.push_back({trias, tf, std::move(bsdf)});
+    if(emitterRadiance.has_value()) {
+        emitters.push_back({trias, tf, std::move(bsdf), emitterRadiance.value()});
+    } else {
+        meshes.push_back({trias, tf, std::move(bsdf)});
+    }
 
     return *this;
 }
 
-SceneBuilder &SceneBuilder::addCube(const Eigen::Affine3f &tf, BSDF bsdf) {
+SceneBuilder &SceneBuilder::addCube(const Eigen::Affine3f &tf, BSDF bsdf, std::optional<Vec3f> emitterRadiance) {
     std::vector<Triangle> trias{
-            Triangle{{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}},
-            Triangle{{-1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}},
-            Triangle{{-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}},
-            Triangle{{-1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}},
-            Triangle{{-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}},
-            Triangle{{-1, -1, -1}, {-1, 1, 1}, {-1, -1, 1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}},
-            Triangle{{1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}},
-            Triangle{{1, -1, -1}, {1, 1, 1}, {1, -1, 1}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}},
-            Triangle{{-1, -1, -1}, {1, -1, -1}, {1, -1, 1}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}},
-            Triangle{{-1, -1, -1}, {1, -1, 1}, {-1, -1, 1}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}},
-            Triangle{{-1, 1, -1}, {1, 1, -1}, {1, 1, 1}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}},
-            Triangle{{-1, 1, -1}, {1, 1, 1}, {-1, 1, 1}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}},
-
+            Triangle{{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0}, {1, 0}, {1, 1}},
+            Triangle{{-1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0}, {1, 1}, {0, 1}},
+            Triangle{{-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0}, {1, 0}, {1, 1}},
+            Triangle{{-1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0}, {1, 1}, {0, 1}},
+            Triangle{{-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {0, 0}, {1, 0}, {1, 1}},
+            Triangle{{-1, -1, -1}, {-1, 1, 1}, {-1, -1, 1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {0, 0}, {1, 1}, {0, 1}},
+            Triangle{{1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 0}, {1, 0}, {1, 1}},
+            Triangle{{1, -1, -1}, {1, 1, 1}, {1, -1, 1}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 0}, {1, 1}, {0, 1}},
+            Triangle{{-1, -1, -1}, {1, -1, -1}, {1, -1, 1}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, 0}, {1, 0}, {1, 1}},
+            Triangle{{-1, -1, -1}, {1, -1, 1}, {-1, -1, 1}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, 0}, {1, 1}, {0, 1}},
+            Triangle{{-1, 1, -1}, {1, 1, -1}, {1, 1, 1}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 0}, {1, 0}, {1, 1}},
+            Triangle{{-1, 1, -1}, {1, 1, 1}, {-1, 1, 1}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 0}, {1, 1}, {0, 1}},
     };
 
 
-    meshes.push_back({trias, tf, std::move(bsdf)});
+    if(emitterRadiance.has_value()) {
+        throw std::runtime_error("Emitter Radiance not supported for OBJs");
+        emitters.push_back({trias, tf, std::move(bsdf), emitterRadiance.value()});
+    } else {
+        meshes.push_back({trias, tf, std::move(bsdf)});
+    }
 
     return *this;
 }

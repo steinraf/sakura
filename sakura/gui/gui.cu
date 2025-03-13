@@ -137,6 +137,24 @@ struct FunctorBounded {
     }
 };
 
+struct FunctorUV {
+    __device__ Color operator()(const Eigen::Vector3f &v) const {
+        const int numChecker = 4;
+        const Color light = Color{0.8f, 0.8f, 0.8f};
+        const Color dark = Color{0.2f, 0.2f, 0.2f};
+
+        const auto checker = [](float u, float v) -> bool {
+            int x = std::floor(numChecker * u);
+            int y = std::floor(numChecker * v);
+            return (x + y) % 2 == 0;
+        };
+
+        //        Color output = checker(v[0], v[1]) ? light : dark;
+        Color output = Color{v[0], v[1], 0.0f};
+        return output;
+    }
+};
+
 void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
 
     std::cout << "Initializing GUI loop\n";
@@ -167,7 +185,8 @@ void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
     //    viewports.emplace_back(vpClone);
 
     viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
-    viewports.push_back(std::make_shared<BufferVisualizer<FunctorPositive, BUFFERTYPE::SAMPLEVARIANCE>>(vp->getFeatureBuffer()->color, "Color Buffer Sample Variance", width, height, FunctorPositive{}));
+    //    viewports.push_back(std::make_shared<BufferVisualizer<FunctorPositive, BUFFERTYPE::SAMPLEVARIANCE>>(vp->getFeatureBuffer()->color, "Color Buffer Sample Variance", width, height, FunctorPositive{}));
+    viewports.push_back(std::make_shared<BufferVisualizer<FunctorUV, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->uv, "UV coordinates", width, height, FunctorUV{}));
     viewports.push_back(std::make_shared<BufferVisualizer<FunctorBounded, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->position, "Position Buffer", width, height, FunctorBounded{scene.getBoundingBox()}));
 
     constexpr unsigned int MAX_SIZE = 4;

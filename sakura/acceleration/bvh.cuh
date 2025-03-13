@@ -77,7 +77,7 @@ public:
             const Ray &ray, Intersection &its,
             bool isShadowRay = false) const noexcept;
 
-    [[nodiscard]] AABB getBoundingBox() const noexcept;
+    __host__ __device__ [[nodiscard]] AABB getBoundingBox() const noexcept;
 };
 
 // The findSplit, delta and determineRange are taken from here

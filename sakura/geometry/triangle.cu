@@ -11,21 +11,17 @@
 
 __host__ __device__ Triangle::Triangle(
         Eigen::Vector3f p0, Eigen::Vector3f p1, Eigen::Vector3f p2,
-        const Eigen::Vector3f &n0, const Eigen::Vector3f &n1,
-        const Eigen::Vector3f &n2
-        //             const Eigen::Vector2f& uv0, const Eigen::Vector2f&
-        //             uv1, const Eigen::Vector2f& uv2
-        ) noexcept
+        const Eigen::Vector3f &n0, const Eigen::Vector3f &n1, const Eigen::Vector3f &n2,
+        Eigen::Vector2f uv0, Eigen::Vector2f uv1, Eigen::Vector2f uv2) noexcept
     : p0(std::move(p0)),
       p1(std::move(p1)),
       p2(std::move(p2)),
       n0(n0.normalized()),
       n1(n1.normalized()),
-      n2(n2.normalized())
-//          uv0(uv0),
-//          uv1(uv1),
-//          uv2(uv2)
-{}
+      n2(n2.normalized()),
+      uv0(std::move(uv0)),
+      uv1(std::move(uv1)),
+      uv2(std::move(uv2)) {}
 
 __device__ Triangle::Triangle() noexcept
     : p0{1, 0, 0},
@@ -33,10 +29,10 @@ __device__ Triangle::Triangle() noexcept
       p2{0, 0, 1},
       n0{1, 0, 0},
       n1{0, 1, 0},
-      n2{0, 0, 1}//          uv0{0.0, 0.0},
-                 //          uv1{1.0, 0.0},
-                 //          uv2{0.0, 1.0}
-{}
+      n2{0, 0, 1},
+      uv0{0.0, 0.0},
+      uv1{1.0, 0.0},
+      uv2{0.0, 1.0} {}
 
 __host__ __device__ bool Triangle::intersectHandler(
         const Ray &ray, Intersection &its) const noexcept {
@@ -103,7 +99,7 @@ __host__ __device__ void Triangle::hitInformationSetter(
 
     its.point = Eigen::Vector3f{bary[0] * p0 + bary[1] * p1 + bary[2] * p2};
 
-    its.uv = {u, v};
+    its.uv = Eigen::Vector2f{bary[0] * uv0 + bary[1] * uv1 + bary[2] * uv2};
 
 
     Vec3f normal = Eigen::Vector3f{bary[0] * n0 + bary[1] * n1 + bary[2] * n2};

@@ -128,6 +128,7 @@ add_executable(${PROJECT_NAME}
         sakura/rng/sampler.cu
         sakura/scene/scene.cu
         sakura/texture/texture.cu
+        sakura/emitter/emitter.cu
 )
 
 

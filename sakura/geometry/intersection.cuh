@@ -66,5 +66,10 @@ struct Intersection {
     float t;
 
     const Triangle *triangle;
-    const BLAS *mesh;
+    const BLAS *meshf;
+    const AreaLight *emitter;
+
+    __host__ __device__ bool isEmitter() const {
+        return emitter != nullptr;
+    }
 };

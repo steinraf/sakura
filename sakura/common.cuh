@@ -10,11 +10,13 @@
 // Forward declarations
 
 struct AABB;
+class AreaLight;
 class BSDF;
 class BLAS;
 struct BSDFQueryRecord;
 class BVH;
 class Camera;
+struct EmitterQueryRecord;
 struct FeatureBuffer;
 struct Film;
 class Frame;

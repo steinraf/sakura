@@ -147,9 +147,9 @@ public:
 
     // Load scene component from file
     SceneBuilder &parseXML(const std::string &filename) noexcept(false);
-    SceneBuilder &addObj(const std::string &filename, const Eigen::Affine3f &tf = Eigen::Affine3f::Identity(), BSDF bsdf = {});
-    SceneBuilder &addRectangle(const Eigen::Affine3f &tf, BSDF bsdf = {});
-    SceneBuilder &addCube(const Eigen::Affine3f &tf, BSDF bsdf = {});
+    SceneBuilder &addObj(const std::string &filename, const Eigen::Affine3f &tf = Eigen::Affine3f::Identity(), BSDF bsdf = {}, std::optional<Vec3f> emitterRadiance = std::nullopt);
+    SceneBuilder &addRectangle(const Eigen::Affine3f &tf, BSDF bsdf = {}, std::optional<Vec3f> emitterRadiance = std::nullopt);
+    SceneBuilder &addCube(const Eigen::Affine3f &tf, BSDF bsdf = {}, std::optional<Vec3f> emitterRadiance = std::nullopt);
 
     // Directly add Components
     //    SceneBuilder &addTriangle(const Triangle &triangle);
@@ -184,6 +184,7 @@ private:
     std::unordered_map<std::string, BSDF> bsdfMap;
 
     std::vector<MeshDescriptorHost> meshes;
+    std::vector<EmitterDescriptorHost> emitters;
     std::vector<Sensor> sensors;
 
     SceneLogger sceneLogger;

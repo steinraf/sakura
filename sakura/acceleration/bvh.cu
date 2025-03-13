@@ -108,7 +108,7 @@ __device__ __host__ BVH::BVH(AccelerationNode *root, AABB boundingBox) noexcept
 
     return true;
 }
-AABB BVH::getBoundingBox() const noexcept {
+__host__ __device__ AABB BVH::getBoundingBox() const noexcept {
     return boundingBox;
 }
 
