@@ -18,20 +18,19 @@ __host__ __device__ Camera::Camera(Eigen::Isometry3f tf, float fov,
                                    float aspectRatio, float aperture,
                                    float focusDist, float near,
                                    float far) noexcept
-    : cameraTransform(std::move(tf)),
-
+    : focusDist(focusDist),
+      cameraTransform(std::move(tf)),
       sampleToCamera(),
-      k(tanf(fov * M_PIf / 360.f)),
+      k(),
       near(near),
       far(far),
-      focusDist(focusDist),
-      lensRadius(sqrtf(2.f) / 2.f * aperture * aspectRatio) {
+      lensRadius(),
+      aspectRatio(aspectRatio) {
 
 
-    sampleToCamera.matrix() << 2 * k, 0.f, 0.f, -k,         //
-            0.f, -2 * k / aspectRatio, 0.f, k / aspectRatio,//
-            0.f, 0.f, 0.f, 1.f,                             //
-            0.f, 0.f, (near - far) / (near * far), 1.f / near;
+    updateLensRadius(aperture);
+    setK(fov);
+    generateSampleToCameraMatrix();
 }
 __device__ Ray Camera::getRay(float u, float v, Sampler &sampler) const {
     Eigen::Vector4f nearSample = (sampleToCamera * Eigen::Vector4f{u, v, 0.0, 1.0});
@@ -103,6 +102,25 @@ __host__ __device__ Eigen::Isometry3f Camera::lookAt(const Eigen::Vector3f &cent
     tf.translation() = center;
 
     return tf;
+}
+void Camera::generateSampleToCameraMatrix() {
+    sampleToCamera.matrix() << 2 * k, 0.f, 0.f, -k,
+            0.f, -2 * k / aspectRatio, 0.f, k / aspectRatio,
+            0.f, 0.f, 0.f, 1.f,
+            0.f, 0.f, (near - far) / (near * far), 1.f / near;
+}
+void Camera::setK(float fov) {
+    k = tanf(fov * M_PIf / 360.f);
+}
+void Camera::updateFOV(float fov) {
+    setK(fov);
+    generateSampleToCameraMatrix();
+}
+void Camera::updateLensRadius(float aperture) {
+    lensRadius = sqrtf(2.f) / 2.f * aperture * aspectRatio;
+}
+void Camera::setFocusPlane(const Vec3f &point) {
+    focusDist = (point - cameraTransform.translation()).norm();
 }
 
 CameraBuilder &CameraBuilder::setTransform(Eigen::Isometry3f transform) {

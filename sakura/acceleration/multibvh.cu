@@ -12,9 +12,18 @@ __device__ bool BLAS::intersect(Ray ray, Intersection &its, bool isShadowRay) co
     ray.transform(inverseTransform);
     assert(bvh);
     //WORKS                                         return EXTREMELY_FALSE;
-    return bvh->intersect(ray, its, isShadowRay);
+    bool didIntersect = bvh->intersect(ray, its, isShadowRay);
+    if(didIntersect) {
+        its.point = transform * its.point;
+        its.shFrame.rotate(transform);
+    }
+    return didIntersect;
 }
-BLAS::BLAS(const MeshDescriptorHost &meshDescriptor) noexcept : bsdf(meshDescriptor.bsdf), bvh(nullptr), inverseTransform(meshDescriptor.transform.inverse()) {
+BLAS::BLAS(const MeshDescriptorHost &meshDescriptor) noexcept
+    : bsdf(meshDescriptor.bsdf),
+      bvh(nullptr),
+      transform(meshDescriptor.transform),
+      inverseTransform(meshDescriptor.transform.inverse()) {
     //TODO make all BVHs contiguous in memory
 
     bvh = getBVH(meshDescriptor.triangles);

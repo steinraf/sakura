@@ -5,6 +5,7 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <vector>
 
@@ -25,7 +26,7 @@ class Scene {
 
 public:
     void render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &camera, curandState *rngStates, const Eigen::Vector2<unsigned int> &windowSize, int spp) const;
-    AABB getBoundingBox() const { return tlas->getBoundingBox(); };
+    [[nodiscard]] AABB getBoundingBox() const { return tlas->getBoundingBox(); };
 
 private:
     friend class SceneBuilder;
@@ -74,6 +75,71 @@ private:
     int indentLevel = 0;
 };
 
+struct ComponentIdea {
+    // Example
+    /*
+     * <[name] ([attribute0=value0], ...)>
+     *  (
+     *   [child0],
+     *   ...
+     *  )
+     * </[name]>
+     */
+    std::string name;
+    struct Attribute {
+        std::string name;
+        std::string value;
+        bool isRequired;
+    };
+    std::vector<Attribute> attributes;
+    struct Child {
+        std::string name;
+        bool isRequired;
+    };
+    std::vector<Child> children;
+};
+
+struct SceneComponent;
+using Component = SceneComponent;
+using ComponentRequestor = std::function<std::shared_ptr<Component>(const std::string &name)>;
+using ComponentAdder = std::function<void(const std::string &name, std::unique_ptr<Component>)>;
+using ComponentGenerator = std::function<std::unique_ptr<Component>(const pugi::xml_node &node, ComponentRequestor requestor, ComponentAdder adder)>;
+
+struct SceneComponent {
+    virtual ~SceneComponent() = default;
+};
+
+struct DefaultComponent : public SceneComponent {
+public:
+    static std::unique_ptr<Component> create(const pugi::xml_node &node, ComponentRequestor requestor, ComponentAdder adder) noexcept(false);
+
+private:
+    std::string name;
+    std::string value;
+};
+
+struct SceneDescriptor {
+    std::vector<std::unique_ptr<Component>> components;
+};
+
+class SceneFactory {
+
+public:
+    SceneFactory &registerComponent(const std::string &name, ComponentGenerator generator);
+
+    std::unique_ptr<Component> createComponent(const pugi::xml_node &node) noexcept(false);
+    SceneDescriptor createScene(const pugi::xml_node &root) noexcept(false);
+
+private:
+    friend Component;
+    std::shared_ptr<Component> requestComponent(const std::string &name) const noexcept(false);
+    void addComponent(const std::string &name, std::unique_ptr<Component> component);
+
+    std::map<std::string, ComponentGenerator> componentGenerators;
+    std::map<std::string, std::shared_ptr<Component>> componentMap;
+};
+
+
 class SceneBuilder {
 public:
     SceneBuilder() = default;
@@ -83,6 +149,7 @@ public:
     SceneBuilder &parseXML(const std::string &filename) noexcept(false);
     SceneBuilder &addObj(const std::string &filename, const Eigen::Affine3f &tf = Eigen::Affine3f::Identity(), BSDF bsdf = {});
     SceneBuilder &addRectangle(const Eigen::Affine3f &tf, BSDF bsdf = {});
+    SceneBuilder &addCube(const Eigen::Affine3f &tf, BSDF bsdf = {});
 
     // Directly add Components
     //    SceneBuilder &addTriangle(const Triangle &triangle);
@@ -105,7 +172,7 @@ private:
 
     // Prepare the XML file for parsing
     // returns document and document root
-    [[nodiscard]] static std::pair<pugi::xml_document, pugi::xml_node> loadXML(const std::string &filename) noexcept(false);
+    [[nodiscard]] static std::pair<pugi::xml_document, pugi::xml_node> initXML(const std::string &filename) noexcept(false);
 
     void xmlChildIterator(const pugi::xml_node &node, auto func) const;
 

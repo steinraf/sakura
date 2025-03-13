@@ -91,6 +91,10 @@ public:
         variance = getZero();
     }
 
+    __host__ __device__ void scale(float factor) {
+        numElements *= factor;
+    }
+
 private:
     __host__ __device__ T getZero() const {
         if constexpr(std::is_same_v<T, Vec3f>) {

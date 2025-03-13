@@ -16,7 +16,7 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
                             unsigned int width, unsigned int height, int spp) {
 
 
-    constexpr int maxBounces = 16;
+    constexpr int maxBounces = 4;
 
     if(blockIdx.x * blockDim.x + threadIdx.x == 0) {
         Sampler sampler{&rngStates[0]};

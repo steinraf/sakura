@@ -35,6 +35,7 @@ public:
 
 private:
     BVH *bvh;
+    Eigen::Affine3f transform;
     Eigen::Affine3f inverseTransform;
     friend TLAS;
 };

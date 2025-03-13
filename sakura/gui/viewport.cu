@@ -30,7 +30,6 @@ __global__ void clearFeatureBuffer(FeatureBuffer *buffer) {
     auto idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(idx >= buffer->numElements) {
-        printf("Terminating early for idx %d\n", idx);
         return;
     }
 
@@ -39,6 +38,21 @@ __global__ void clearFeatureBuffer(FeatureBuffer *buffer) {
     buffer->position[idx] = {};
     buffer->albedo[idx] = {};
     buffer->uv[idx] = {};
+}
+
+__global__ void decayFeatureBuffer(FeatureBuffer *buffer, float k) {
+
+    auto idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(idx >= buffer->numElements) {
+        return;
+    }
+
+    buffer->color[idx].scale(k);
+    buffer->normal[idx].scale(k);
+    buffer->position[idx].scale(k);
+    buffer->albedo[idx].scale(k);
+    buffer->uv[idx].scale(k);
 }
 
 __host__ FeatureBuffer::FeatureBuffer(size_t numElements) : numElements(numElements), color(nullptr), normal(nullptr), position(nullptr), albedo(nullptr), uv(nullptr) {
@@ -62,6 +76,13 @@ void FeatureBuffer::clear() {
     size_t blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
 
     clearFeatureBuffer<<<blocksPerGrid, threadsPerBlock>>>(this);
+    checkCudaErrors(cudaDeviceSynchronize());
+}
+__host__ void __host__ FeatureBuffer::decay(float k) {
+    int threadsPerBlock = 256;
+    size_t blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
+
+    decayFeatureBuffer<<<blocksPerGrid, threadsPerBlock>>>(this, k);
     checkCudaErrors(cudaDeviceSynchronize());
 }
 
@@ -124,18 +145,19 @@ void OpenGLViewport::render() {
 
 
     t += dt;
-    float circleScale = 20.0;
-    float circleSpeed = 2.0;
+    //    float circleScale = 20.0;
+    //    float circleSpeed = 2.0;
+    //
+    //    translateCamera(dt * Eigen::Vector3f{circleScale * std::sin(t * circleSpeed), 0.0, circleScale * std::cos(t * circleSpeed)});
 
-    translateCamera(dt * Eigen::Vector3f{circleScale * std::sin(t * circleSpeed), 0.0, circleScale * std::cos(t * circleSpeed)});
-
-    handleUserInput();
 
     ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
+    handleUserInput();
 
     auto start = std::chrono::high_resolution_clock::now();
 
     scene.render(surface, featureBuffer, camera, rngStates, size, samplesPerPixel);
+
 
     checkCudaErrors(cudaDeviceSynchronize());
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start).count();
@@ -194,24 +216,47 @@ FeatureBuffer *OpenGLViewport::getFeatureBuffer() const {
     return featureBuffer;
 }
 void OpenGLViewport::handleUserInput() {
-    constexpr float cameraVel = 10.0;
-    if(ImGui::IsKeyPressed(ImGuiKey_W)) {
+    float cameraVel = 10.0;
+    if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) {
+        cameraVel *= 10;
+    }
+    if(ImGui::IsKeyDown(ImGuiKey_W)) {
         translateCameraRelative(cameraVel * Eigen::Vector3f{0, 0, dt});
     }
-    if(ImGui::IsKeyPressed(ImGuiKey_S)) {
+    if(ImGui::IsKeyDown(ImGuiKey_S)) {
         translateCameraRelative(cameraVel * Eigen::Vector3f{0, 0, -dt});
     }
-    if(ImGui::IsKeyPressed(ImGuiKey_Space)) {
+    if(ImGui::IsKeyDown(ImGuiKey_Space)) {
         translateCameraRelative(cameraVel * Eigen::Vector3f{0, dt, 0});
     }
-    if(ImGui::IsKeyPressed(ImGuiKey_LeftShift)) {
+    if(ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
         translateCameraRelative(cameraVel * Eigen::Vector3f{0, -dt, 0});
     }
-    if(ImGui::IsKeyPressed(ImGuiKey_A)) {
+    if(ImGui::IsKeyDown(ImGuiKey_A)) {
         translateCameraRelative(cameraVel * Eigen::Vector3f{dt, 0, 0});
     }
-    if(ImGui::IsKeyPressed(ImGuiKey_D)) {
+    if(ImGui::IsKeyDown(ImGuiKey_D)) {
         translateCameraRelative(cameraVel * Eigen::Vector3f{-dt, 0, 0});
+    }
+    if(ImGui::IsKeyDown(ImGuiKey_F)) {
+        if(ImGui::IsWindowHovered()) {
+            ImVec2 mousePos = ImGui::GetMousePos();
+            ImVec2 cornerPos = ImGui::GetCursorScreenPos();// todo check that the image is indeed the next element being drawn
+            ImVec2 mouseUV = ImVec2((mousePos.x - cornerPos.x) / size[0], (mousePos.y - cornerPos.y) / size[1]);
+            if(mouseUV.x >= 0 && mouseUV.x < 1 && mouseUV.y >= 0 && mouseUV.y < 1) {
+                auto pixelX = size[0] - 1 - std::min<size_t>(mouseUV[0] * size[0], size[0] - 1);
+                auto pixelY = std::min<size_t>(mouseUV[1] * size[1], size[1] - 1);
+
+                size_t pIndex = pixelY * size[0] + pixelX;
+                Vec3f focusPoint = getFeatureBuffer()->position[pIndex].getMean();
+
+                camera.setFocusPlane(focusPoint);
+                featureBuffer->decay(0.8);
+                //                featureBuffer->clear();
+
+                ImGui::SetTooltip("Setting focus point to (%f, %f, %f)", focusPoint[0], focusPoint[1], focusPoint[2]);
+            }
+        }
     }
 }
 

@@ -99,7 +99,15 @@ SceneBuilder &SceneBuilder::parseXML(
 
     currentXMLRoot = std::filesystem::path{filename}.parent_path();
 
-    auto [doc, root] = loadXML(filename);
+    auto [doc, root] = initXML(filename);
+
+    //    SceneFactory sceneFactory;
+    //    sceneFactory.registerComponent("default", DefaultComponent::create);
+    //    //            .registerComponent("sensor", SensorComponent::create);
+    //
+    //    auto scene = sceneFactory.createScene(root);
+    //
+    //    return *this;
 
     [[maybe_unused]] const auto &rootLogger = sceneLogger.getNewSection("scene");
 
@@ -112,6 +120,7 @@ SceneBuilder &SceneBuilder::parseXML(
                     CREATE_PARSER(default),
                     CREATE_PARSER(bsdf),
             };
+
 
     xmlChildIterator(root, [&](const pugi::xml_node &node) {
         std::string name = node.name();
@@ -130,7 +139,7 @@ SceneBuilder &SceneBuilder::parseXML(
     return *this;
 }
 
-std::pair<pugi::xml_document, pugi::xml_node> SceneBuilder::loadXML(const std::string &filename) noexcept(false) {
+std::pair<pugi::xml_document, pugi::xml_node> SceneBuilder::initXML(const std::string &filename) noexcept(false) {
     pugi::xml_document doc;
     pugi::xml_parse_result result = doc.load_file(filename.c_str());
 
@@ -145,10 +154,6 @@ std::pair<pugi::xml_document, pugi::xml_node> SceneBuilder::loadXML(const std::s
 
     auto root = doc.document_element();
 
-    // version string used in mitsuba is not supported here
-    if(root.attribute("version")) {
-        std::cout << "Warning: Ignoring scene version string " << root.attribute("version").value() << '\n';
-    }
 
     // The root name must be called "scene"
     if(std::string(root.name()) != "scene") {
@@ -209,6 +214,25 @@ void SceneBuilder::parse_shape(const pugi::xml_node &shape, auto &logger) {
         });
 
         addRectangle(tf, bsdf);
+
+    } else if(attribute == "cube") {
+        Eigen::Affine3f tf = Eigen::Affine3f::Identity();
+        BSDF bsdf;
+
+        xmlChildIterator(shape, [&](const pugi::xml_node &node) {
+            if(std::string(node.name()) == "ref") {
+                bsdf = bsdfMap.at(node.attribute("id").value());
+                logger.template log<false>(R"(<ref id=")" + lookupName(node.attribute("id").value()) + R"("/>)");
+            } else if(std::string(node.name()) == "transform") {
+                xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                    tf = parseTransform(node, logger.getNewSection("transform"));
+                });
+            } else {
+                logger.template log<true>("Ignoring Shape Node " + std::string(node.name()));
+            }
+        });
+
+        addCube(tf, bsdf);
 
     } else {
         logger.template log<true>("Ignoring shape due to attribute " + attribute);
@@ -485,6 +509,10 @@ void SceneBuilder::parse_bsdf(const pugi::xml_node &bsdf, auto &logger) {
                             logger.template log<true>("Ignoring BSDF " + std::string(node.name()));
                         }
                     });
+                } else if(std::string(node.attribute("type").value()) == "twosided") {
+                    logger.template log<false>("Recursively parsing twosided");
+                    auto bsdfLoggerSection = logger.getNewSection("bsdf");
+                    parse_bsdf(node, bsdfLoggerSection);
                 } else {
                     logger.template log<true>("Ignoring BSDF with type " + std::string(node.attribute("type").value()));
                 }
@@ -496,6 +524,26 @@ void SceneBuilder::parse_bsdf(const pugi::xml_node &bsdf, auto &logger) {
         logger.template log<false>("Recursively parsing bumpmap bsdf");
         auto bsdfLoggerSection = logger.getNewSection("bsdf");
         parse_bsdf(bsdf.find_child([](const pugi::xml_node &node) { return std::string(node.name()) == "bsdf"; }), bsdfLoggerSection);
+    } else if(std::string(bsdf.attribute("type").value()) == "dielectric") {
+        float intIOR = 1.5f, extIOR = 1.0f;
+        xmlChildIterator(bsdf, [&](const pugi::xml_node &node) {
+            if(std::string(node.name()) == "float") {
+                auto name = lookupName(node.attribute("name").value());
+                auto value = std::stof(lookupName(node.attribute("value").value()));
+                if(name == "int_ior") {
+                    intIOR = value;
+                    logger.template log<false>(R"(<float name="int_ior" value=")" + std::to_string(value) + "\"/>");
+                } else if(name == "ext_ior") {
+                    extIOR = value;
+                    logger.template log<false>(R"(<float name="ext_ior" value=")" + std::to_string(value) + "\"/>");
+                } else {
+                    logger.template log<true>("Ignoring float attribute " + name);
+                }
+            } else {
+                logger.template log<true>("Ignoring XML Node " + std::string(node.name()));
+            }
+        });
+        bsdfMap[id] = BSDF{Material{MaterialType::DIELECTRIC, intIOR, extIOR}, Texture::DEFAULT()};
     } else if(std::string(bsdf.attribute("type").value()) == "thindielectric") {
         logger.template log<false>(R"(type="thindielectric")");
         logger.template log<true>("Converting thindielectric BSDF to regular dielectric BSDF");
@@ -540,6 +588,29 @@ SceneBuilder &SceneBuilder::addRectangle(const Eigen::Affine3f &tf, BSDF bsdf) {
     return *this;
 }
 
+SceneBuilder &SceneBuilder::addCube(const Eigen::Affine3f &tf, BSDF bsdf) {
+    std::vector<Triangle> trias{
+            Triangle{{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}},
+            Triangle{{-1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}},
+            Triangle{{-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}},
+            Triangle{{-1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}},
+            Triangle{{-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}},
+            Triangle{{-1, -1, -1}, {-1, 1, 1}, {-1, -1, 1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}},
+            Triangle{{1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}},
+            Triangle{{1, -1, -1}, {1, 1, 1}, {1, -1, 1}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}},
+            Triangle{{-1, -1, -1}, {1, -1, -1}, {1, -1, 1}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}},
+            Triangle{{-1, -1, -1}, {1, -1, 1}, {-1, -1, 1}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}},
+            Triangle{{-1, 1, -1}, {1, 1, -1}, {1, 1, 1}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}},
+            Triangle{{-1, 1, -1}, {1, 1, 1}, {-1, 1, 1}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}},
+
+    };
+
+
+    meshes.push_back({trias, tf, std::move(bsdf)});
+
+    return *this;
+}
+
 
 ScopedLogger::~ScopedLogger() {
     formatter.dedent();
@@ -577,4 +648,58 @@ void ScopedLogger::log(const std::string &msg) const {
 
 ScopedLogger SceneLogger::getNewSection(std::string tagName, const std::string &attribute) {
     return ScopedLogger{*this, std::move(tagName), attribute};
+}
+
+SceneFactory &SceneFactory::registerComponent(const std::string &name, ComponentGenerator generator) {
+
+    if(componentGenerators.contains(name)) {
+        throw std::runtime_error("Component " + name + " already registered");
+    }
+
+    componentGenerators[name] = std::move(generator);
+
+    return *this;
+}
+std::unique_ptr<Component> SceneFactory::createComponent(const pugi::xml_node &node) noexcept(false) {
+    auto name = node.name();
+    if(!componentGenerators.contains(name)) {
+        throw std::runtime_error("Unknown component " + std::string(name));
+    }
+
+    auto componentRequest = [this](const std::string &name) { return requestComponent(name); };
+    auto componentAdder = [this](const std::string &name, std::unique_ptr<Component> component) { addComponent(name, std::move(component)); };
+
+
+    auto component = componentGenerators[name](node, componentRequest, componentAdder);
+    return component;
+}
+std::shared_ptr<Component> SceneFactory::requestComponent(const std::string &name) const noexcept(false) {
+    if(!componentMap.contains(name)) {
+        throw std::runtime_error("Unknown component " + name);
+    }
+
+    return componentMap.at(name);
+}
+void SceneFactory::addComponent(const std::string &name, std::unique_ptr<Component> component) {
+    if(componentMap.contains(name)) {
+        throw std::runtime_error("Component " + name + " already added");
+    }
+
+    componentMap[name] = std::move(component);
+}
+SceneDescriptor SceneFactory::createScene(const pugi::xml_node &root) noexcept(false) {
+    SceneDescriptor sceneDescriptor;
+    for(const auto &child: root.children()) {
+        if(child.type() == pugi::node_comment ||
+           child.type() == pugi::node_declaration)
+            continue;
+        if(child.type() != pugi::node_element)
+            throw std::runtime_error("Unknown XML Node encountered.");
+
+        sceneDescriptor.components.push_back(createComponent(child));
+    }
+    return sceneDescriptor;
+}
+std::unique_ptr<Component> DefaultComponent::create(const pugi::xml_node &node, ComponentRequestor requestor, ComponentAdder adder) noexcept(false) {
+    return std::make_unique<DefaultComponent>();
 }

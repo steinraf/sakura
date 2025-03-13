@@ -51,6 +51,10 @@ public:
     __host__ __device__ static inline float cosTheta(const Eigen::Vector3f &v) noexcept {
         return v[2];
     }
+
+    __host__ __device__ void rotate(const Eigen::Affine3f &tf) {
+        *this = Frame(tf.linear() * n);
+    }
 };
 
 

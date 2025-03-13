@@ -360,7 +360,7 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
 #ifndef NDEBUG
     std::cout << "Built BVH in " << duration.count() << "ms\n";
 #endif
-    
+
     *bvh = BVH{bvhNodes, boundingBox};
 
     return bvh;
