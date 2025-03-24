@@ -37,13 +37,21 @@ namespace sample {
         return v;
     }
 
-    [[nodiscard]] __device__ float squareToUniformSphereCapPdf(
+    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToUniformSphere(const Eigen::Vector2f &sample) noexcept {
+        float cosT = 2.f * sample[0] - 1.f;
+        float phi = 2.f * M_PIf * sample[1];
+        float sinT = sin(acos(cosT));
+        return {sinT * sin(phi), sinT * cos(phi), cosT};
+    }
+
+
+    [[nodiscard]] __host__ __device__ float squareToUniformSphereCapPdf(
             const Eigen::Vector3f &v, float cosThetaMax) noexcept {
         return static_cast<float>(v[2] >= cosThetaMax) * M_1_PIf /
                (2.f - 2.f * cosThetaMax);
     }
 
-    [[nodiscard]] __device__ Eigen::Vector3f squareToUniformSphereCap(
+    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToUniformSphereCap(
             const Eigen::Vector2f &sample, float cosThetaMax) noexcept {
         const float cosT = sample[0] * (1 - cosThetaMax) + cosThetaMax;
         const float phi = 2 * M_PIf * sample[1];
@@ -51,23 +59,69 @@ namespace sample {
         return {sTheta * cos(phi), sTheta * sin(phi), cosT};
     }
 
-    [[nodiscard]] __device__ Eigen::Vector2f squareToUniformDisk(
+    [[nodiscard]] __host__ __device__ Eigen::Vector2f squareToUniformDisk(
             const Eigen::Vector2f &sample) noexcept {
         const float r = sqrt(sample[0]);
         const float phi = (2 * sample[1] - 1) * M_PIf;
         return {r * sin(phi), r * cos(phi)};
     }
 
-    [[nodiscard]] __device__ Eigen::Vector3f squareToCosineHemisphere(
+    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToCosineHemisphere(
             const Eigen::Vector2f &sample) noexcept {
         auto p = squareToUniformDisk(sample);
         float z = sqrt(1 - p[0] * p[0] - p[1] * p[1]);
         return {p[0], p[1], z};
     }
 
-    [[nodiscard]] __device__ float squareToCosineHemispherePdf(
+    [[nodiscard]] __host__ __device__ float squareToCosineHemispherePdf(
             const Eigen::Vector3f &v) noexcept {
         return v[2] < 0 ? 0.f : v[2] * M_1_PIf;
     }
+
+    [[nodiscard]] __host__ __device__ size_t sampleCDF(float sample, float *cdf, size_t cdfSize) noexcept {
+        const float *begin = cdf;
+        size_t count = cdfSize - 1, step = 0;
+
+        const float *it;
+        while(count > 0) {
+            it = begin;
+            step = count / 2;
+            it += step;
+            if(*it < sample) {
+                begin = ++it;
+                count -= step + 1;
+            } else {
+                count = step;
+            }
+        }
+
+#ifndef NDEBUG
+        int counter = 0;
+#endif
+
+        // We dont want to return a cdf with zero delta
+        while(begin >= cdf && begin < cdf + cdfSize - 1) {
+            if((*(begin + 1) - *begin) == 0.0f) {
+                ++begin;
+#ifndef NDEBUG
+                ++counter;
+#endif
+            } else
+                break;
+        }
+
+#ifndef NDEBUG
+        if(counter > 0) {
+            printf("Skipped %d elements\n", counter);
+        }
+#endif
+
+        assert(begin >= cdf);
+        assert(begin < cdf + cdfSize);
+
+
+        return begin - cdf;
+    }
+
 
 }// namespace sample

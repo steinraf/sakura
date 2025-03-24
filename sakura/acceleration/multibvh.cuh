@@ -59,6 +59,8 @@ public:
             const Ray &ray, Intersection &its,
             bool isShadowRay = false) const noexcept;
 
+    [[nodiscard]] __device__ bool intersect(const Ray &ray) const noexcept;
+
     void __host__ cleanup();
 
     __host__ __device__ AABB getBoundingBox() const {

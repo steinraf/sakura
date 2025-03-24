@@ -149,8 +149,8 @@ struct FunctorUV {
             return (x + y) % 2 == 0;
         };
 
-        //        Color output = checker(v[0], v[1]) ? light : dark;
-        Color output = Color{v[0], v[1], 0.0f};
+        Color output = checker(v[0], v[1]) ? light : dark;
+        //        Color output = Color{v[0], v[1], 0.0f};
         return output;
     }
 };

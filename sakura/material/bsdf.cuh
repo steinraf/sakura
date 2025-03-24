@@ -28,6 +28,7 @@ public:
 
     __host__ __device__ BSDFQueryRecord() = default;
     __host__ __device__ BSDFQueryRecord(Vec3f v) : wIn(v), wOut(v) {}
+    __host__ __device__ BSDFQueryRecord(Vec3f win, Vec3f wout, EMeasure measure) : wIn(win), wOut(wout), measure(measure) {}
 
 private:
 };

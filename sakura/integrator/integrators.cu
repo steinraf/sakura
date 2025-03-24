@@ -11,25 +11,27 @@
 #include "../rng/sampler.cuh"
 #include "integrators.cuh"
 
+#define mas render_kern
 
-__global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
-                            Camera camera, curandState *rngStates,
-                            unsigned int width, unsigned int height, int spp) {
+__global__ void mas(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
+                    Camera camera, curandState *rngStates,
+                    unsigned int width, unsigned int height, int spp) {
 
 
-    constexpr int maxBounces = 4;
+    constexpr int maxBounces = 16;
 
 
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
         pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
         size_t x = pixelIndex % width, y = pixelIndex / width;
 
+        const float u = float(x) / float(width);
+        const float v = float(y) / float(height);
 
         Sampler sampler{&rngStates[pixelIndex]};
 
 
-        auto screenPos = Eigen::Vector3f{float(x) / float(width),
-                                         float(y) / float(height), 0.0f};
+        auto screenPos = Eigen::Vector3f{u, v, 0.0f};
 
         const Eigen::Vector3f backgroundColor =
                 0.0f * Eigen::Vector3f{1.0, 1.0, 1.0};
@@ -38,12 +40,9 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
 
         for(int sample = 0; sample < spp; ++sample) {
 
-            auto cameraRay =
-                    camera.getRay(float(x) / float(width), float(y) / float(height), sampler);
-
 
             Intersection intersection;
-            Ray currentRay = cameraRay;
+            Ray currentRay = camera.getRay(u, v, sampler);
             auto color = Eigen::Vector3f{0.0, 0.0, 0.0};
             auto t = Eigen::Vector3f{1.0, 1.0, 1.0};
             float etaScale = 1.0;// TODO Changes to Russian Roulette due to
@@ -54,32 +53,52 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
             while(true) {
                 if(!tlas->intersect(currentRay, intersection, false)) {
 
-                    color.array() += t.array() * backgroundColor.array();
+                    color.array() += t.array() * envmap.eval(currentRay).array();
                     if(numBounces == 0) {
                         buffer->normal[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
                         buffer->position[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
-                        //                        buffer->albedo[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
+                        buffer->albedo[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
                         buffer->uv[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
                     }
                     break;
                 } else if(numBounces == 0) {
+
+                    BSDFQueryRecord bsdfQueryRecord{intersection.shFrame.toLocal(-currentRay.dir)};
+                    bsdfQueryRecord.measure = EMeasure::ESolidAngle;
+                    bsdfQueryRecord.uv = intersection.uv;
+                    auto bsdfSample = intersection.meshf->bsdf.sample(bsdfQueryRecord, sampler.getSample2D());
+
                     buffer->normal[pixelIndex].addElement(intersection.shFrame.n);
                     buffer->position[pixelIndex].addElement(intersection.point);
-                    //                    buffer->albedo[pixelIndex].addElement(intersection.material->albedo);
+                    buffer->albedo[pixelIndex].addElement(bsdfSample);
                     buffer->uv[pixelIndex].addElement(Eigen::Vector3f{intersection.uv[0], intersection.uv[1], 0.0});
                 }
 
-                //                if(tlas->containsEmitters()) {
-                //                    const auto *emitter = tlas->getRandomEmitter(sampler.getSample1D());
-                //                    EmitterQueryRecord emitterQueryRecord{intersection.point};
-                //                }
+                constexpr int maxEnvSamples = 0;
+                for(int envSamples = 0; envSamples < maxEnvSamples; ++envSamples) {
+                    EmitterQueryRecord envMapEQR{intersection.point};
+
+                    const Color envMapEMSSample = envmap.sample(envMapEQR, sampler.getSample3D());
+
+                    if(!tlas->intersect(envMapEQR.shadowRay)) {
+
+                        BSDFQueryRecord bsdfQueryRecord{
+                                intersection.shFrame.toLocal(-currentRay.dir),
+                                intersection.shFrame.toLocal(envMapEQR.wIn),
+                                EMeasure::ESolidAngle};
+                        bsdfQueryRecord.measure = EMeasure::ESolidAngle;
+                        bsdfQueryRecord.uv = intersection.uv;
+
+                        const float tempPDF = envmap.pdf(envMapEQR);
+
+                        color.array() += envMapEMSSample.array() * t.array() * intersection.meshf->bsdf.eval(bsdfQueryRecord).array() * Frame::cosTheta(intersection.shFrame.toLocal(envMapEQR.wIn)) * tempPDF / (intersection.meshf->bsdf.pdf(bsdfQueryRecord) + tempPDF) / maxEnvSamples;
+                    }
+                }
 
                 if(intersection.isEmitter()) {
                     if(intersection.shFrame.n.dot(currentRay.dir) < 0) {
                         color.array() += t.array() * intersection.emitter->radiance.array();
                     }
-                    //                    color.array() += t.array() * intersection.emitter->radiance.array();
-                    break;
                 }
 
 
@@ -93,6 +112,9 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
                 t.array() /= successProbability;
 
                 BSDFQueryRecord bsdfQueryRecord{intersection.shFrame.toLocal(-currentRay.dir)};
+                bsdfQueryRecord.measure = EMeasure::ESolidAngle;
+                bsdfQueryRecord.uv = intersection.uv;
+
                 auto bsdfSample = intersection.meshf->bsdf.sample(bsdfQueryRecord, sampler.getSample2D());
 
 
@@ -115,6 +137,7 @@ __global__ void render_kern(TLAS *tlas, FeatureBuffer *buffer,
         buffer->color[pixelIndex].addElement(totalColor);
     }
 }
+
 
 __global__ void bufferToSurface(cudaSurfaceObject_t surface, FeatureBuffer *buffer, unsigned int width, unsigned int height) {
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;

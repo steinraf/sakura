@@ -23,10 +23,6 @@ SET(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
 
 message("COMPILING FOR CUDA_ARCH_LIST: " "${CUDA_ARCH_LIST}")
 
-set(OIDN_NEURAL_RUNTIME DNNL)
-
-find_package(TBB REQUIRED)
-
 
 include_directories(libs/pugixml/src)
 include_directories(libs/oneTBB)
@@ -68,6 +64,8 @@ include_directories(libs/ImGui/backends)
 include_directories(libs/glfw)
 include_directories(libs/glfw/include)
 
+include_directories(libs/tinyexr)
+
 
 add_library(pugixml STATIC libs/pugixml/src/pugixml.cpp)
 
@@ -75,23 +73,33 @@ add_library(pugixml STATIC libs/pugixml/src/pugixml.cpp)
 find_package(PNGwriter 0.7.0 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(X11 REQUIRED)
+find_package(ZLIB REQUIRED)
 find_package(OpenMP REQUIRED)
+
+set(OpenEXR_ROOT /usr/local)
+
+find_package(OpenEXR REQUIRED)
+
+if (OpenEXR_FOUND)
+    message(STATUS "OpenEXR found: ${OpenEXR_LIBRARIES}")
+else ()
+    message(FATAL_ERROR "OpenEXR not found! Tried paths: ${OpenEXR_ROOT}")
+endif ()
+
 
 include_directories(${CMAKE_SOURCE_DIR}/includes)
 include_directories(${OPENGL_INCLUDE_DIRS})
-#include_directories("${CUDA_INCLUDE_DIRS}")
+include_directories(libs/stb)
 
-#find_package(CUDA REQUIRED)
 include(CheckLanguage)
 check_language(CUDA)
 if (CMAKE_CUDA_COMPILER)
     enable_language(CUDA)
 
-    # to tell your code it was found via #ifdef USE_CUDA:
-    add_definitions(-DUSE_CUDA)
-
     include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 endif ()
+
+include_directories(${CMAKE_SOURCE_DIR}/includes)
 
 
 add_executable(${PROJECT_NAME}
@@ -108,6 +116,8 @@ add_executable(${PROJECT_NAME}
 
         libs/ImGui/backends/imgui_impl_glfw.cpp
         libs/ImGui/backends/imgui_impl_opengl3.cpp
+
+        libs/tinyexr/tinyexr.h
 
 
         main.cu
@@ -163,6 +173,9 @@ add_dependencies(${PROJECT_NAME} pugixml)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 set_target_properties(${PROJECT_NAME} PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
+# use TINYEXR_USE_STB_ZLIB
 
-target_link_libraries(${PROJECT_NAME} PRIVATE ${CUDA_LIBRARIES} ${OPENGL_LIBRARIES} glfw GL GLEW X11 pthread pugixml PNGwriter::PNGwriter ${OPENEXR_LIBRARIES} Eigen3::Eigen)
+target_compile_definitions(${PROJECT_NAME} PRIVATE TINYEXR_USE_MINIZ=0)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE ${CUDA_LIBRARIES} ${OPENGL_LIBRARIES} glfw GL GLEW X11 OpenMP::OpenMP_CXX pthread pugixml PNGwriter::PNGwriter Eigen3::Eigen)
 

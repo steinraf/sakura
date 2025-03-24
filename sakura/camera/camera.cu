@@ -49,9 +49,14 @@ __device__ Ray Camera::getRay(float u, float v, Sampler &sampler) const {
     float ft = focusDist / nearP[2];
     Eigen::Vector3f pFocus = ft * nearP;
     Eigen::Vector3f dNorm = (pFocus - pLens).normalized();
+    Eigen::Vector3f dir = (cameraTransform.linear() * dNorm).normalized();
+
+    if(!isfinite(dir[0]) || !isfinite(dir[1]) || !isfinite(dir[2])) {
+        assert(false);
+    }
 
     return Ray{cameraTransform * pLens,
-               (cameraTransform.linear() * dNorm).normalized(), near, far};
+               dir, near, far};
 }
 __host__ void Camera::createTranslationSlider() {
     ImGui::SliderFloat("Camera X", &cameraTransform.translation()[0], -100, 100);
@@ -103,23 +108,23 @@ __host__ __device__ Eigen::Isometry3f Camera::lookAt(const Eigen::Vector3f &cent
 
     return tf;
 }
-void Camera::generateSampleToCameraMatrix() {
+__host__ __device__ void Camera::generateSampleToCameraMatrix() {
     sampleToCamera.matrix() << 2 * k, 0.f, 0.f, -k,
             0.f, -2 * k / aspectRatio, 0.f, k / aspectRatio,
             0.f, 0.f, 0.f, 1.f,
             0.f, 0.f, (near - far) / (near * far), 1.f / near;
 }
-void Camera::setK(float fov) {
+__host__ __device__ void Camera::setK(float fov) {
     k = tanf(fov * M_PIf / 360.f);
 }
-void Camera::updateFOV(float fov) {
+__host__ __device__ void Camera::updateFOV(float fov) {
     setK(fov);
     generateSampleToCameraMatrix();
 }
-void Camera::updateLensRadius(float aperture) {
+__host__ __device__ void Camera::updateLensRadius(float aperture) {
     lensRadius = sqrtf(2.f) / 2.f * aperture * aspectRatio;
 }
-void Camera::setFocusPlane(const Vec3f &point) {
+__host__ __device__ void Camera::setFocusPlane(const Vec3f &point) {
     focusDist = (point - cameraTransform.translation()).norm();
 }
 

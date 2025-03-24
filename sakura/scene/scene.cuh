@@ -32,6 +32,7 @@ private:
     friend class SceneBuilder;
     Scene() = default;
     TLAS *tlas;
+    Texture envmap;
 };
 
 class SceneLogger;
@@ -150,6 +151,7 @@ public:
     SceneBuilder &addObj(const std::string &filename, const Eigen::Affine3f &tf = Eigen::Affine3f::Identity(), BSDF bsdf = {}, std::optional<Vec3f> emitterRadiance = std::nullopt);
     SceneBuilder &addRectangle(const Eigen::Affine3f &tf, BSDF bsdf = {}, std::optional<Vec3f> emitterRadiance = std::nullopt);
     SceneBuilder &addCube(const Eigen::Affine3f &tf, BSDF bsdf = {}, std::optional<Vec3f> emitterRadiance = std::nullopt);
+    SceneBuilder &addSphere(float radius, const Vec3f &center, BSDF bsdf = {}, std::optional<Vec3f> emitterRadiance = std::nullopt);
 
     // Directly add Components
     //    SceneBuilder &addTriangle(const Triangle &triangle);
@@ -169,6 +171,7 @@ private:
     void parse_sensor(const pugi::xml_node &sensor, auto &logger);
     void parse_default(const pugi::xml_node &node, auto &logger);
     void parse_bsdf(const pugi::xml_node &bsdf, auto &logger);
+    void parse_emitter(const pugi::xml_node &emitter, auto &logger);
 
     // Prepare the XML file for parsing
     // returns document and document root
@@ -186,6 +189,8 @@ private:
     std::vector<MeshDescriptorHost> meshes;
     std::vector<EmitterDescriptorHost> emitters;
     std::vector<Sensor> sensors;
+
+    Texture environmentMap = Texture::ZERO();
 
     SceneLogger sceneLogger;
 

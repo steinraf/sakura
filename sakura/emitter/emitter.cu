@@ -24,3 +24,7 @@ __device__ bool AreaLight::intersect(const Ray &ray, Intersection &its, bool isS
 __device__ AABB AreaLight::getBoundingBox() const noexcept {
     return blas->getBoundingBox();
 }
+__device__ Color AreaLight::sample(EmitterQueryRecord &eqr, Vec3f rng) const {
+    assert(false);
+    return Color::Zero();
+}

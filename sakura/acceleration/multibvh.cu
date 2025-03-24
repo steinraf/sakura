@@ -11,7 +11,6 @@
 __device__ bool BLAS::intersect(Ray ray, Intersection &its, bool isShadowRay) const noexcept {
     ray.transform(inverseTransform);
     assert(bvh);
-    //WORKS                                         return EXTREMELY_FALSE;
     bool didIntersect = bvh->intersect(ray, its, isShadowRay);
     if(didIntersect) {
         its.point = transform * its.point;
@@ -111,4 +110,8 @@ __host__ void __host__ TLAS::cleanup() {
 
     checkCudaErrors(cudaFree(meshes));
     checkCudaErrors(cudaFree(emitters));
+}
+__device__ bool TLAS::intersect(const Ray &ray) const noexcept {
+    Intersection its;
+    return intersect(ray, its, true);
 }

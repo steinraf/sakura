@@ -45,11 +45,21 @@ public:
 
     __host__ __device__ Eigen::Vector3f toWorld(
             const Eigen::Vector3f &v) const noexcept {
+        //        assert(std::isfinite(v[0]));
+        //        assert(std::isfinite(v[1]));
+        //        assert(std::isfinite(v[2]));
         return s * v[0] + t * v[1] + n * v[2];
     }
 
     __host__ __device__ static inline float cosTheta(const Eigen::Vector3f &v) noexcept {
         return v[2];
+    }
+
+    __host__ __device__ static inline float tanTheta(const Eigen::Vector3f &v) noexcept {
+        float k = 1 - v[2] * v[2];
+        if(k < 0)
+            return 0;
+        return std::sqrt(k) / v[2];
     }
 
     __host__ __device__ void rotate(const Eigen::Affine3f &tf) {

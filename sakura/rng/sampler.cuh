@@ -29,18 +29,22 @@ namespace sample {
     [[nodiscard]] __device__ Eigen::Vector3f uniformHemisphere(
             Sampler &sampler, const Eigen::Vector3f &pole) noexcept;
 
-    [[nodiscard]] __device__ float squareToUniformSphereCapPdf(
+    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToUniformSphere(const Eigen::Vector2f &sample) noexcept;
+
+    [[nodiscard]] __host__ __device__ float squareToUniformSphereCapPdf(
             const Eigen::Vector3f &v, float cosThetaMax) noexcept;
 
-    [[nodiscard]] __device__ Eigen::Vector3f squareToUniformSphereCap(
+    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToUniformSphereCap(
             const Eigen::Vector2f &sample, float cosThetaMax) noexcept;
 
-    [[nodiscard]] __device__ Eigen::Vector2f squareToUniformDisk(
+    [[nodiscard]] __host__ __device__ Eigen::Vector2f squareToUniformDisk(
             const Eigen::Vector2f &sample) noexcept;
 
-    [[nodiscard]] __device__ Eigen::Vector3f squareToCosineHemisphere(
+    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToCosineHemisphere(
             const Eigen::Vector2f &sample) noexcept;
-    [[nodiscard]] __device__ float squareToCosineHemispherePdf(
+    [[nodiscard]] __host__ __device__ float squareToCosineHemispherePdf(
             const Eigen::Vector3f &v) noexcept;
+
+    [[nodiscard]] __host__ __device__ size_t sampleCDF(float sample, float *cdf, size_t cdfSize) noexcept;
 
 }// namespace sample

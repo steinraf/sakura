@@ -18,6 +18,12 @@
 #include "../acceleration/multibvh.cuh"
 #include "pugixml.hpp"
 
+//#define __half CUDA_HALF
+//#include <ImfRgbaFile.h>
+//#undef __half
+
+//#include <ImfRgbaFile.h>
+
 
 void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &camera, curandState *rngStates, const Eigen::Vector2<unsigned int> &windowSize, int spp) const {
 
@@ -26,7 +32,7 @@ void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &c
     int numSMs;
     checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
 
-    render_kern<<<32 * numSMs, 256>>>(tlas, buffer, camera, rngStates, windowSize[0], windowSize[1], spp);
+    render_kern<<<32 * numSMs, 256>>>(tlas, envmap, buffer, camera, rngStates, windowSize[0], windowSize[1], spp);
     checkCudaErrors(cudaDeviceSynchronize());
     bufferToSurface<<<32 * numSMs, 256>>>(surface, buffer, windowSize[0], windowSize[1]);
     checkCudaErrors(cudaDeviceSynchronize());
@@ -80,10 +86,11 @@ SceneBuilder &SceneBuilder::addObj(
                 faceVertices[i] = vertices[std::stoi(vertexIndex) - 1];
                 std::string textureIndex;
                 std::getline(vertexStream, textureIndex, '/');
-                if(textureIndex.empty()) {
+                int tIndex = std::stoi(textureIndex);
+                if(textureIndex.empty() || tIndex >= uvs.size()) {
                     uvTextures[i] = Vec2f{i % 2, i / 2};
                 } else {
-                    uvTextures[i] = uvs[std::stoi(textureIndex) - 1];
+                    uvTextures[i] = uvs[tIndex - 1];
                 }
                 std::string normalIndex;
                 std::getline(vertexStream, normalIndex, '/');
@@ -98,7 +105,6 @@ SceneBuilder &SceneBuilder::addObj(
     }
 
     if(emitterRadiance.has_value()) {
-        throw std::runtime_error("Emitter Radiance not supported for OBJs");
         emitters.push_back({trias, tf, std::move(bsdf), emitterRadiance.value()});
     } else {
         meshes.push_back({trias, tf, std::move(bsdf)});
@@ -134,6 +140,7 @@ SceneBuilder &SceneBuilder::parseXML(
                     CREATE_PARSER(sensor),
                     CREATE_PARSER(default),
                     CREATE_PARSER(bsdf),
+                    CREATE_PARSER(emitter),
             };
 
 
@@ -268,8 +275,114 @@ void SceneBuilder::parse_shape(const pugi::xml_node &shape, auto &logger) {
 
         addCube(tf, bsdf);
 
+    } else if(attribute == "cube") {
+        Eigen::Affine3f tf = Eigen::Affine3f::Identity();
+        BSDF bsdf;
+
+        xmlChildIterator(shape, [&](const pugi::xml_node &node) {
+            if(std::string(node.name()) == "ref") {
+                bsdf = bsdfMap.at(node.attribute("id").value());
+                logger.template log<false>(R"(<ref id=")" + lookupName(node.attribute("id").value()) + R"("/>)");
+            } else if(std::string(node.name()) == "transform") {
+                xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                    tf = parseTransform(node, logger.getNewSection("transform"));
+                });
+            } else {
+                logger.template log<true>("Ignoring Shape Node " + std::string(node.name()));
+            }
+        });
+
+        addCube(tf, bsdf);
+
+    } else if(attribute == "sphere") {
+        float radius = 1.0f;
+        Eigen::Vector3f pos = Eigen::Vector3f::Zero();
+        BSDF bsdf;
+        std::optional<Vec3f> emitterRadiance = std::nullopt;
+
+        xmlChildIterator(shape, [&](const pugi::xml_node &node) {
+            if(std::string(node.name()) == "ref") {
+                bsdf = bsdfMap.at(node.attribute("id").value());
+                logger.template log<false>(R"(<ref id=")" + lookupName(node.attribute("id").value()) + R"("/>)");
+            } else if(std::string(node.name()) == "emitter") {
+                xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                    if(std::string(node.name()) == "rgb") {
+                        if(std::string(node.attribute("name").value()) == "radiance") {
+                            emitterRadiance = parseVector(node.attribute("value").value());
+                            logger.template log<false>(R"(<rgb name="radiance" value=")" + (std::ostringstream{} << emitterRadiance.value().matrix()).str() + "\"/>");
+                        } else {
+                            logger.template log<true>("Ignoring RGB " + std::string(node.attribute("name").value()));
+                        }
+                    } else {
+                        logger.template log<true>("Ignoring BSDF " + std::string(node.name()));
+                    }
+                });
+            } else if(std::string(node.name()) == "float") {
+                auto name = lookupName(node.attribute("name").value());
+                auto value = std::stof(lookupName(node.attribute("value").value()));
+                if(name == "radius") {
+                    radius = value;
+                    logger.template log<false>("<float name=\"radius\" value=\"" + std::to_string(value) + "\"/>");
+                } else {
+                    logger.template log<true>("Ignoring float attribute " + name);
+                }
+            } else if(std::string(node.name()) == "point") {
+                auto name = lookupName(node.attribute("name").value());
+                Vec3f value{
+                        node.attribute("x").as_float(),
+                        node.attribute("y").as_float(),
+                        node.attribute("z").as_float()};
+                if(name == "center") {
+                    pos = value;
+                    logger.template log<false>("<point name=\"center\" value=\"" + (std::ostringstream{} << value.matrix()).str() + "\"/>");
+                } else {
+                    logger.template log<true>("Ignoring point attribute " + name);
+                }
+
+            } else {
+                logger.template log<true>("Ignoring Shape Node " + std::string(node.name()));
+            }
+        });
+
+        if(emitterRadiance.has_value()) {
+            addSphere(radius, pos, bsdf, emitterRadiance);
+        } else {
+            addSphere(radius, pos, bsdf);
+        }
     } else {
         logger.template log<true>("Ignoring shape due to attribute " + attribute);
+    }
+}
+
+void SceneBuilder::parse_emitter(const pugi::xml_node &emitter, auto &logger) {
+    auto attribute = lookupName(emitter.attribute("type").value());
+    if(attribute == "envmap") {
+        std::string filename = "";
+        Eigen::Affine3f tf = Eigen::Affine3f::Identity();
+
+        xmlChildIterator(emitter, [&](const pugi::xml_node &node) {
+            if(std::string(node.name()) == "string") {
+                auto name = lookupName(node.attribute("name").value());
+                auto value = lookupName(node.attribute("value").value());
+                if(name == "filename") {
+                    filename = value;
+                    logger.template log<false>("<string name=\"filename\" value=\"" + value + "\"/>");
+                } else {
+                    logger.template log<true>("Ignoring envmap string attribute " + name);
+                }
+            } else if(std::string(node.name()) == "transform") {
+                xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                    tf = parseTransform(node, logger.getNewSection("transform"));
+                });
+            } else {
+                logger.template log<true>("Ignoring Emitter Node " + std::string(node.name()));
+            }
+        });
+
+        environmentMap = Texture{currentXMLRoot / filename, true, tf};
+
+    } else {
+        logger.template log<true>("Ignoring emitter due to attribute " + attribute);
     }
 }
 
@@ -291,6 +404,8 @@ Scene SceneBuilder::build() {
     *t = TLAS(meshes, emitters);
 
     scene.tlas = t;
+
+    scene.envmap = environmentMap;
 
 
     return scene;
@@ -332,7 +447,7 @@ void SceneBuilder::parse_sensor(const pugi::xml_node &sensor, auto &logger) {
             auto value = std::stof(lookupName(node.attribute("value").value()));
             if(name == "fov") {
                 cameraBuilder.setFOV(value);
-                logger.template log<false>("<float name=\"fov\" value=\"" + std::to_string(value) + "\"/>");
+                logger.template log<false>(R"(<float name="fov" value=")" + std::to_string(value) + "\"/>");
             } else if(name == "aspectRatio") {
                 logger.template log<true>("ASPECT RATIO CAN NOT BE SET MANUALLY");
                 //cameraBuilder.setAspectRatio(value);
@@ -452,9 +567,24 @@ Eigen::Isometry3f SceneBuilder::parseTransform(const pugi::xml_node &node, auto 
             }
         }
         tf = Camera::lookAt(origin, target, up);
+    } else if(std::string(node.name()) == "rotate") {
+        // <rotate x="1" angle="114"/>
+        Eigen::Vector3f axis = [&node]() {
+            if(node.find_attribute([](const pugi::xml_attribute &attr) { return std::string(attr.name()) == "x"; })) {
+                return Eigen::Vector3f::UnitX();
+            } else if(node.find_attribute([](const pugi::xml_attribute &attr) { return std::string(attr.name()) == "y"; })) {
+                return Eigen::Vector3f::UnitY();
+            } else if(node.find_attribute([](const pugi::xml_attribute &attr) { return std::string(attr.name()) == "z"; })) {
+                return Eigen::Vector3f::UnitZ();
+            } else {
+                throw std::runtime_error("No axis specified in rotate");
+            }
+        }();
+        tf.rotate(Eigen::AngleAxisf(std::stof(node.attribute("angle").value()), axis));
     } else {
         logger.template log<true>("Unknown transform type " + std::string(node.name()));
     }
+
 
     return tf;
 }
@@ -510,14 +640,82 @@ void SceneBuilder::parse_bsdf(const pugi::xml_node &bsdf, auto &logger) {
                             } else {
                                 logger.template log<true>("Ignoring RGB " + std::string(node.attribute("name").value()));
                             }
+                        } else if(std::string(node.name()) == "texture") {
+                            if(std::string(node.attribute("name").value()) == "reflectance") {
+                                xmlChildIterator(node, [&](const pugi::xml_node &node) {
+                                    if(std::string(node.name()) == "string") {
+                                        auto name = lookupName(node.attribute("name").value());
+                                        auto filename = lookupName(node.attribute("value").value());
+                                        if(name == "filename") {
+                                            bsdfMap[id] = BSDF{Material{MaterialType::DIFFUSE}, Texture{currentXMLRoot / filename}};
+                                            logger.template log<false>("<string name=\"filename\" value=\"" + filename + "\"/>");
+                                        } else if(name == "filter_type") {
+                                            if(lookupName(node.attribute("value").value()) == "bilinear") {
+                                                logger.template log<false>("<string name=\"filter_type\" value=\"bilinear\"/>");
+                                            } else {
+                                                logger.template log<true>("Ignoring String " + std::string(node.attribute("name").value()));
+                                            }
+                                        } else {
+                                            logger.template log<true>("Ignoring String " + std::string(node.attribute("name").value()));
+                                        }
+
+                                    } else {
+                                        logger.template log<true>("Ignoring Texture " + std::string(node.name()));
+                                    }
+                                });
+                            } else {
+                                logger.template log<true>("Ignoring Texture " + std::string(node.attribute("name").value()));
+                            }
                         } else {
                             logger.template log<true>("Ignoring BSDF " + std::string(node.name()));
                         }
                     });
                 } else if(std::string(node.attribute("type").value()) == "roughconductor") {
+
+
                     logger.template log<false>(R"(type="roughconductor")");
                     logger.template log<true>("Converting roughconductor BSDF to regular conductor BSDF");
                     bsdfMap[id] = BSDF{Material{MaterialType::SPECULAR}, Texture::DEFAULT()};
+
+
+                    //                    logger.template log<true>("Converting roughconductor BSDF to microfacet BSDF");
+                    //                    float alpha = node.child("float").attribute("value").as_float();
+                    //                    float intIOR = 1.0f, extIOR = 1.5f;
+                    //                    Color kd = parseVector(node.find_child_by_attribute("rgb", "name", "specular_reflectance").attribute("value").value());
+                    //                    bsdfMap[id] = BSDF{Material{
+                    //                                               MaterialType::MICROFACET,
+                    //                                               alpha,
+                    //                                               1.5f, 1.0f, kd},
+                    //                                       Texture::DEFAULT()};
+                    //                    logger.template log<false>(R"(<float name="alpha" value=")" + std::to_string(alpha) + "\"/>");
+                    //                    logger.template log<false>(R"(<float name="int_ior" value=")" + std::to_string(intIOR) + "\"/>");
+                    //                    logger.template log<false>(R"(<float name="ext_ior" value=")" + std::to_string(extIOR) + "\"/>");
+                    //                    logger.template log<false>(R"(<rgb name="specular_reflectance" value=")" + (std::ostringstream{} << kd.matrix()).str() + "\"/>");
+
+
+                } else if(std::string(node.attribute("type").value()) == "coating") {
+
+
+                    logger.template log<false>(R"(type="coating")");
+                    logger.template log<true>("Converting coating BSDF to regular conductor BSDF");
+                    bsdfMap[id] = BSDF{Material{MaterialType::SPECULAR}, Texture::DEFAULT()};
+
+
+                    //                    logger.template log<true>("Converting roughconductor BSDF to microfacet BSDF");
+                    //                    float alpha = node.child("float").attribute("value").as_float();
+                    //                    float intIOR = 1.0f, extIOR = 1.5f;
+                    //                    Color kd = parseVector(node.find_child_by_attribute("rgb", "name", "specular_reflectance").attribute("value").value());
+                    //                    bsdfMap[id] = BSDF{Material{
+                    //                                               MaterialType::MICROFACET,
+                    //                                               alpha,
+                    //                                               1.5f, 1.0f, kd},
+                    //                                       Texture::DEFAULT()};
+                    //                    logger.template log<false>(R"(<float name="alpha" value=")" + std::to_string(alpha) + "\"/>");
+                    //                    logger.template log<false>(R"(<float name="int_ior" value=")" + std::to_string(intIOR) + "\"/>");
+                    //                    logger.template log<false>(R"(<float name="ext_ior" value=")" + std::to_string(extIOR) + "\"/>");
+                    //                    logger.template log<false>(R"(<rgb name="specular_reflectance" value=")" + (std::ostringstream{} << kd.matrix()).str() + "\"/>");
+
+
                 } else if(std::string(node.attribute("type").value()) == "conductor") {
                     logger.template log<false>(R"(type="conductor")");
                     bsdfMap[id] = BSDF{Material{MaterialType::SPECULAR}, Texture::DEFAULT()};
@@ -574,10 +772,10 @@ void SceneBuilder::parse_bsdf(const pugi::xml_node &bsdf, auto &logger) {
             if(std::string(node.name()) == "float") {
                 auto name = lookupName(node.attribute("name").value());
                 auto value = std::stof(lookupName(node.attribute("value").value()));
-                if(name == "int_ior") {
+                if(name == "int_ior" || name == "intIOR") {
                     intIOR = value;
                     logger.template log<false>(R"(<float name="int_ior" value=")" + std::to_string(value) + "\"/>");
-                } else if(name == "ext_ior") {
+                } else if(name == "ext_ior" || name == "extIOR") {
                     extIOR = value;
                     logger.template log<false>(R"(<float name="ext_ior" value=")" + std::to_string(value) + "\"/>");
                 } else {
@@ -669,6 +867,15 @@ SceneBuilder &SceneBuilder::addCube(const Eigen::Affine3f &tf, BSDF bsdf, std::o
     } else {
         meshes.push_back({trias, tf, std::move(bsdf)});
     }
+
+    return *this;
+}
+SceneBuilder &SceneBuilder::addSphere(float radius, const Vec3f &center, BSDF bsdf, std::optional<Vec3f> emitterRadiance) {
+    Eigen::Affine3f tf = Eigen::Affine3f::Identity();
+    tf.translate(center);
+    tf.scale(Eigen::Vector3f::Constant(radius));
+
+    addObj("scenes/sphere.obj", tf, std::move(bsdf), std::move(emitterRadiance));
 
     return *this;
 }

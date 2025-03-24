@@ -26,3 +26,6 @@
 [submodule "libs/freetype"]
 	path = libs/freetype
 	url = https://gitlab.freedesktop.org/freetype/freetype.git
+[submodule "libs/tinyexr"]
+	path = libs/tinyexr
+	url = git@github.com:syoyo/tinyexr.git

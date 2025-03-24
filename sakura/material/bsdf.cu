@@ -45,13 +45,16 @@ __host__ __device__ Color BSDF::eval(const BSDFQueryRecord &query) const noexcep
 __host__ __device__ float BSDF::pdf(const BSDFQueryRecord &query) const noexcept {
     return material.pdf(query);
 }
+
 BSDF::BSDF(Material material, Texture texture) : material(material), texture(texture) {
 }
 __device__ Color BSDF::sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &randomSample) const noexcept {
     switch(material.type) {
         case MaterialType::DIFFUSE:
-            if(Frame::cosTheta(bsdfQueryRecord.wIn) <= 0)
+            if(Frame::cosTheta(bsdfQueryRecord.wIn) <= 0) {
+                bsdfQueryRecord.wOut = Vec3f{0.0f, 0.0f, 1.0f};
                 return Color::Zero();
+            }
 
             bsdfQueryRecord.measure = EMeasure::ESolidAngle;
 
@@ -64,6 +67,10 @@ __device__ Color BSDF::sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &ran
             if(Frame::cosTheta(bsdfQueryRecord.wIn) <= 0)
                 return Color::Zero();
 
+            assert(isfinite(bsdfQueryRecord.wIn[0]));
+            assert(isfinite(bsdfQueryRecord.wIn[1]));
+            assert(isfinite(bsdfQueryRecord.wIn[2]));
+
             bsdfQueryRecord.wOut = Vec3f{
                     -bsdfQueryRecord.wIn[0],
                     -bsdfQueryRecord.wIn[1],
@@ -74,39 +81,54 @@ __device__ Color BSDF::sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &ran
 
             return Color::Ones();
         case MaterialType::DIELECTRIC:
-            float extIOR = material.iorExterior(), intIOR = material.iorInterior(), cosThetaI = Frame::cosTheta(bsdfQueryRecord.wIn);
-            Vec3f normal{0.f, 0.f, 1.f};
-            if(Frame::cosTheta(bsdfQueryRecord.wIn) < 0) {
-                extIOR = intIOR;
-                intIOR = extIOR;
-                cosThetaI *= -1;
-                normal *= -1;
-            }
+            return [&]() -> Color {
+                float extIOR = material.iorExterior(), intIOR = material.iorInterior(), cosThetaI = Frame::cosTheta(bsdfQueryRecord.wIn);
+                Vec3f normal{0.f, 0.f, 1.f};
+                if(Frame::cosTheta(bsdfQueryRecord.wIn) < 0) {
+                    extIOR = intIOR;
+                    intIOR = extIOR;
+                    cosThetaI *= -1;
+                    normal *= -1;
+                }
 
 
-            const float fresnelCoeff = fresnel(cosThetaI, extIOR, intIOR);
+                const float fresnelCoeff = fresnel(cosThetaI, extIOR, intIOR);
 
-            bsdfQueryRecord.measure = EMeasure::EDiscrete;
+                bsdfQueryRecord.measure = EMeasure::EDiscrete;
 
-            if(randomSample[0] < fresnelCoeff) {
-                bsdfQueryRecord.eta = 1.f;
+                if(randomSample[0] < fresnelCoeff) {
+                    bsdfQueryRecord.eta = 1.f;
 
-                bsdfQueryRecord.wOut = Vec3f(
-                        -bsdfQueryRecord.wIn[0],
-                        -bsdfQueryRecord.wIn[1],
-                        bsdfQueryRecord.wIn[2]);
+                    assert(isfinite(bsdfQueryRecord.wIn[0]));
+                    assert(isfinite(bsdfQueryRecord.wIn[1]));
+                    assert(isfinite(bsdfQueryRecord.wIn[2]));
 
-                return Color::Ones();
+                    bsdfQueryRecord.wOut = Vec3f(
+                            -bsdfQueryRecord.wIn[0],
+                            -bsdfQueryRecord.wIn[1],
+                            bsdfQueryRecord.wIn[2]);
 
-            } else {
-                bsdfQueryRecord.eta = extIOR / intIOR;
 
-                bsdfQueryRecord.wOut =
-                        -bsdfQueryRecord.eta * (bsdfQueryRecord.wIn - (bsdfQueryRecord.wIn.dot(normal) * normal)) - normal * sqrt(1 - bsdfQueryRecord.eta * bsdfQueryRecord.eta * (1 - bsdfQueryRecord.wIn[2] * bsdfQueryRecord.wIn[2]));
+                    return Color::Ones();
 
-                return Color{bsdfQueryRecord.eta * bsdfQueryRecord.eta,
-                             bsdfQueryRecord.eta * bsdfQueryRecord.eta,
-                             bsdfQueryRecord.eta * bsdfQueryRecord.eta};
-            }
+                } else {
+                    bsdfQueryRecord.eta = extIOR / intIOR;
+
+                    bsdfQueryRecord.wOut =
+                            -bsdfQueryRecord.eta * (bsdfQueryRecord.wIn - (bsdfQueryRecord.wIn.dot(normal) * normal)) - normal * sqrt(1 - bsdfQueryRecord.eta * bsdfQueryRecord.eta * (1 - bsdfQueryRecord.wIn[2] * bsdfQueryRecord.wIn[2]));
+
+                    assert(isfinite(bsdfQueryRecord.wOut[0]));
+                    assert(isfinite(bsdfQueryRecord.wOut[1]));
+                    assert(isfinite(bsdfQueryRecord.wOut[2]));
+
+                    return Color{bsdfQueryRecord.eta * bsdfQueryRecord.eta,
+                                 bsdfQueryRecord.eta * bsdfQueryRecord.eta,
+                                 bsdfQueryRecord.eta * bsdfQueryRecord.eta};
+                }
+            }();
+
+        case MaterialType::MICROFACET:
+            assert(false);
+            return Color::Zero();
     }
 }

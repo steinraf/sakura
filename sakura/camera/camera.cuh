@@ -28,12 +28,12 @@ public:
     __host__ __device__ void translate(const Eigen::Vector3f &x);
     __host__ __device__ void relativeTranslate(const Eigen::Vector3f &x);
 
-    void updateFOV(float fov);
-    void updateLensRadius(float aperture);
+    __host__ __device__ void updateFOV(float fov);
+    __host__ __device__ void updateLensRadius(float aperture);
 
     float focusDist;
 
-    void setFocusPlane(const Vec3f &point);
+    __host__ __device__ void setFocusPlane(const Vec3f &point);
 
 private:
     Eigen::Isometry3f cameraTransform;
@@ -42,8 +42,8 @@ private:
     float near, far;
     float lensRadius;
     float aspectRatio;
-    void generateSampleToCameraMatrix();
-    void setK(float fov);
+    __host__ __device__ void generateSampleToCameraMatrix();
+    __host__ __device__ void setK(float fov);
 };
 
 class CameraBuilder {
