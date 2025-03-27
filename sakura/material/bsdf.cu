@@ -83,10 +83,9 @@ __device__ Color BSDF::sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &ran
         case MaterialType::DIELECTRIC:
             return [&]() -> Color {
                 float extIOR = material.iorExterior(), intIOR = material.iorInterior(), cosThetaI = Frame::cosTheta(bsdfQueryRecord.wIn);
-                Vec3f normal{0.f, 0.f, 1.f};
-                if(Frame::cosTheta(bsdfQueryRecord.wIn) < 0) {
-                    extIOR = intIOR;
-                    intIOR = extIOR;
+                Vec3f normal = Vec3f::UnitZ();
+                if(cosThetaI < 0) {
+                    std::swap(extIOR, intIOR);
                     cosThetaI *= -1;
                     normal *= -1;
                 }
@@ -121,9 +120,7 @@ __device__ Color BSDF::sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &ran
                     assert(isfinite(bsdfQueryRecord.wOut[1]));
                     assert(isfinite(bsdfQueryRecord.wOut[2]));
 
-                    return Color{bsdfQueryRecord.eta * bsdfQueryRecord.eta,
-                                 bsdfQueryRecord.eta * bsdfQueryRecord.eta,
-                                 bsdfQueryRecord.eta * bsdfQueryRecord.eta};
+                    return bsdfQueryRecord.eta * bsdfQueryRecord.eta * Color::Ones();
                 }
             }();
 
@@ -131,4 +128,13 @@ __device__ Color BSDF::sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &ran
             assert(false);
             return Color::Zero();
     }
+}
+__host__ __device__ Color BSDF::evalTexture(const Eigen::Vector2f &uv) const noexcept {
+    return texture.eval(uv);
+}
+__host__ __device__ bool BSDF::hasZeroTexture() const noexcept {
+    return texture.type == TextureType::CONSTANT && texture.getConstant() == Color::Zero();
+}
+__host__ __device__ void BSDF::setUnitTexture() noexcept {
+    texture = Texture::ONES();
 }

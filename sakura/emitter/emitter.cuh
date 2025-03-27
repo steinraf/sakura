@@ -20,7 +20,9 @@ public:
 
     [[nodiscard]] __device__ bool intersect(const Ray &ray, Intersection &its, bool isShadowRay = false) const noexcept;
 
-    [[nodiscard]] __device__ Color sample(EmitterQueryRecord &eqr, Vec3f rng) const;
+    [[nodiscard]] __device__ float pdf(const EmitterQueryRecord &eqr) const noexcept;
+    [[nodiscard]] __device__ Color eval(const EmitterQueryRecord &eqr) const noexcept;
+    [[nodiscard]] __device__ Color sample(EmitterQueryRecord &eqr, const Vec3f &rng) const;
 
     const BLAS *blas;
 

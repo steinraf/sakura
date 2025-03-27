@@ -66,18 +66,34 @@ struct AccelerationNode {
 // Bounding Volume Hierarchy
 class BVH {
 private:
+    Triangle *triangleBuffer;
     AccelerationNode *root;
     AABB boundingBox;
 
+    float surfaceArea;
+
+    float *cdf;
+    size_t numTriangles;
+
+
 public:
-    __device__ __host__ explicit BVH(AccelerationNode *root, AABB boundingBox) noexcept;
+    __device__ __host__ explicit BVH(Triangle *triangles,
+                                     AccelerationNode *root,
+                                     AABB boundingBox,
+                                     float surfaceArea /* surface of geometry, not related to SAH */,
+                                     float *cdf,
+                                     size_t numTriangles) noexcept;
 
 
     [[nodiscard]] __device__ bool intersect(
             const Ray &ray, Intersection &its,
             bool isShadowRay = false) const noexcept;
 
-    __host__ __device__ [[nodiscard]] AABB getBoundingBox() const noexcept;
+    [[nodiscard]] __host__ __device__ AABB getBoundingBox() const noexcept;
+
+    [[nodiscard]] __host__ __device__ float getArea() const noexcept;
+
+    [[nodiscard]] __host__ __device__ Triangle *sampleTriangle(float rng) const noexcept;
 };
 
 // The findSplit, delta and determineRange are taken from here

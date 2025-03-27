@@ -27,22 +27,21 @@ class BLAS {
 public:
     __host__ explicit BLAS(const MeshDescriptorHost &meshDescriptor) noexcept;
 
-    //    __host__ __device__ BLAS(const BLAS &other) noexcept = delete;
-    //    __host__ __device__ BLAS &operator=(const BLAS &other) noexcept = delete;
-    //    __host__ __device__ BLAS(BLAS &&other) noexcept = delete;
-    //    __host__ __device__ BLAS &operator=(BLAS &&other) noexcept = default;
-
     [[nodiscard]] __host__ __device__ AABB getBoundingBox() const noexcept;// todo account for transform
 
     [[nodiscard]] __device__ bool intersect(
             Ray ray, Intersection &its,
             bool isShadowRay = false) const noexcept;
 
+    [[nodiscard]] __host__ __device__ float pdfSurface(const ShapeQueryRecord &sqr) const noexcept;
+
+    __host__ __device__ void sampleSurface(ShapeQueryRecord &sqr, const Vec3f &rng) const noexcept;
 
     BSDF bsdf;
 
 private:
     BVH *bvh;
+
     Eigen::Affine3f transform;
     Eigen::Affine3f inverseTransform;
 

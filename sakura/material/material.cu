@@ -14,7 +14,7 @@ __host__ __device__ Color Material::eval(const Texture &texture, const BSDFQuery
 
     switch(type) {
         case MaterialType::DIFFUSE:
-            if(bsdfQueryRecord.measure != EMeasure::EDiscrete || Frame::cosTheta(bsdfQueryRecord.wIn) <= 0 || Frame::cosTheta(bsdfQueryRecord.wOut) <= 0)
+            if(bsdfQueryRecord.measure != EMeasure::ESolidAngle || Frame::cosTheta(bsdfQueryRecord.wIn) <= 0 || Frame::cosTheta(bsdfQueryRecord.wOut) <= 0)
                 return {0.0f, 0.0f, 0.0f};
 
             return texture.eval(bsdfQueryRecord.uv) * M_1_PIf;

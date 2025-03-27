@@ -177,17 +177,17 @@ void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
 
     auto vp = std::make_shared<OpenGLViewport>(scene, width, height, "Raw Output", cam);
 
-    //    viewports.push_back(std::make_shared<Denoiser>(vp->getFeatureBuffer(), width, height, "Denoised Output"));
+    viewports.push_back(std::make_shared<Denoiser>(vp->getFeatureBuffer(), width, height, "Denoised Output"));
     viewports.push_back(vp);
 
     //    cam.translate(Eigen::Vector3f{eyeWidth, 0, 0});
     //    auto vpClone = std::make_shared<OpenGLViewport>(scene, width, height, "Offset Viewport", cam);
     //    viewports.emplace_back(vpClone);
 
-    viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
-    //    viewports.push_back(std::make_shared<BufferVisualizer<FunctorPositive, BUFFERTYPE::SAMPLEVARIANCE>>(vp->getFeatureBuffer()->color, "Color Buffer Sample Variance", width, height, FunctorPositive{}));
-    viewports.push_back(std::make_shared<BufferVisualizer<FunctorUV, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->uv, "UV coordinates", width, height, FunctorUV{}));
-    viewports.push_back(std::make_shared<BufferVisualizer<FunctorBounded, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->position, "Position Buffer", width, height, FunctorBounded{scene.getBoundingBox()}));
+    //    viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
+    //    //    viewports.push_back(std::make_shared<BufferVisualizer<FunctorPositive, BUFFERTYPE::SAMPLEVARIANCE>>(vp->getFeatureBuffer()->color, "Color Buffer Sample Variance", width, height, FunctorPositive{}));
+    //    viewports.push_back(std::make_shared<BufferVisualizer<FunctorUV, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->uv, "UV coordinates", width, height, FunctorUV{}));
+    //    viewports.push_back(std::make_shared<BufferVisualizer<FunctorBounded, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->position, "Position Buffer", width, height, FunctorBounded{scene.getBoundingBox()}));
 
     constexpr unsigned int MAX_SIZE = 4;
     assert(viewports.size() <= MAX_SIZE && "Only 4 viewports supported");

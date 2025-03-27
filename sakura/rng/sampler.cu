@@ -66,6 +66,14 @@ namespace sample {
         return {r * sin(phi), r * cos(phi)};
     }
 
+    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToUniformTriangle(
+            const Eigen::Vector2f &sample) noexcept {
+        float s = sqrtf(sample[0]);
+        float u = 1 - s;
+        float v = sample[1] * s;
+        return {u, v, 1 - u - v};
+    }
+
     [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToCosineHemisphere(
             const Eigen::Vector2f &sample) noexcept {
         auto p = squareToUniformDisk(sample);

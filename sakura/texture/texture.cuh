@@ -17,6 +17,8 @@ class Texture {
 public:
     TextureType type = TextureType::CONSTANT;
 
+    [[nodiscard]] __host__ __device__ static float EMITTER_DIST() noexcept { return 1000000.0f; }
+
     //    __host__ __device__ Texture() noexcept = default;
     __host__ __device__ Texture(const Texture &other) noexcept;
     __host__ __device__ Texture(Texture &&other) noexcept;
@@ -32,6 +34,7 @@ public:
 
     [[nodiscard]] __host__ static Texture ZERO() noexcept;
     [[nodiscard]] __host__ static Texture DEFAULT() noexcept;
+    [[nodiscard]] __host__ static Texture ONES() noexcept;
 
     [[nodiscard]] __host__ __device__ explicit Texture(Color color) noexcept;
 
@@ -44,8 +47,8 @@ public:
 
     [[nodiscard]] __host__ __device__ Color sample(EmitterQueryRecord &emitterQueryRecord, const Eigen::Vector3f &sample) const noexcept;
 
+    [[nodiscard]] __host__ __device__ Color getConstant() const noexcept;
 
-private:
     union {
         Color constant = {0.5f, 0.1f, 0.1f};
         struct {
@@ -55,4 +58,6 @@ private:
             Eigen::Affine3f inverseTransform;
         } image;
     };
+
+private:
 };

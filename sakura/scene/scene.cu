@@ -381,6 +381,39 @@ void SceneBuilder::parse_emitter(const pugi::xml_node &emitter, auto &logger) {
 
         environmentMap = Texture{currentXMLRoot / filename, true, tf};
 
+    } else if(attribute == "directional") {
+        Vec3f dir = Vec3f::UnitZ();
+        float irradiance = 1.0;
+        logger.template log<true>("Replacing directional emitter with far away sphere emitter.");
+        xmlChildIterator(emitter, [&](const pugi::xml_node &node) {
+            if(std::string(node.name()) == "vector") {
+                auto name = lookupName(node.attribute("name").value());
+                if(name == "direction") {
+                    dir = parseVector(node.attribute("value").value());
+                    logger.template log<false>(R"(<vector name="direction" value=")" + (std::ostringstream{} << dir.matrix()).str() + "\"/>");
+
+                } else {
+                    logger.template log<true>("Ignoring vector attribute " + name);
+                }
+            } else if(std::string(node.name()) == "float") {
+                auto name = lookupName(node.attribute("name").value());
+                if(name == "irradiance") {
+                    irradiance = node.attribute("value").as_float();
+                    logger.template log<false>(R"(<float name="irradiance" value=")" + std::to_string(irradiance) + "\"/>");
+
+                } else {
+                    logger.template log<true>("Ignoring float attribute " + name);
+                }
+            } else {
+                logger.template log<true>("Ignoring Emitter Node " + std::string(node.name()));
+            }
+        });
+
+        float dist = Texture::EMITTER_DIST() * 0.1f;
+        float r = dist * 0.1f;
+        float k = dist * irradiance / (4 * M_PIf);//TODO use correct conversion from irradiance to radiance
+        addSphere(r, dist * -dir, BSDF{Material::Diffuse(), Texture::ONES()}, k * Vec3f::Ones());
+
     } else {
         logger.template log<true>("Ignoring emitter due to attribute " + attribute);
     }

@@ -289,8 +289,12 @@ Denoiser::Denoiser(FeatureBuffer *buffer, unsigned int width, unsigned int heigh
     resDesc.resType = cudaResourceTypeArray;
     resDesc.res.array.array = cudaArray;
 
+    checkCudaErrors(cudaMallocManaged(&weights, size[0] * size[1] * sizeof(float)));
+    checkCudaErrors(cudaMallocManaged(&colorBuffer, size[0] * size[1] * sizeof(Vec3f)));
+
 
     checkCudaErrors(cudaCreateSurfaceObject(&surface, &resDesc));
+    checkCudaErrors(cudaDeviceSynchronize());
 }
 Denoiser::~Denoiser() {
     checkCudaErrors(cudaDestroySurfaceObject(surface));
@@ -315,8 +319,12 @@ void Denoiser::render() {
     int numSMs;
     checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
 
-    denoise<<<32 * numSMs, 256>>>(surface, buffer, size[0], size[1]);
+
+    denoise<<<32 * numSMs, 256>>>(buffer, colorBuffer, weights, size[0], size[1]);
     checkCudaErrors(cudaDeviceSynchronize());
+    applyWeights<<<32 * numSMs, 256>>>(surface, colorBuffer, weights, size[0], size[1]);
+    checkCudaErrors(cudaDeviceSynchronize());
+
 
     glClear(GL_COLOR_BUFFER_BIT);
     glBindTexture(GL_TEXTURE_2D, texture);

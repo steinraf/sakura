@@ -48,6 +48,11 @@ public:
 
     [[nodiscard]] __device__ Color sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &sample) const noexcept;
 
+    [[nodiscard]] __host__ __device__ Color evalTexture(const Eigen::Vector2f &uv) const noexcept;
+
+    [[nodiscard]] __host__ __device__ bool hasZeroTexture() const noexcept;
+    __host__ __device__ void setUnitTexture() noexcept;
+
 private:
     Material material;
     Texture texture;

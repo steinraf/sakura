@@ -134,9 +134,9 @@ struct ColorToRadiance {
     __host__ __device__ float operator()(const Vec3f &v) const noexcept {
         const auto y = static_cast<float>((&v - data) % width);
         if(isEnvMap) {
-            return std::clamp(v.norm(), 0.0f, 1000.0f) * std::sin(y / static_cast<float>(height));
+            return std::clamp(v.norm(), 0.0f, 100.0f) * std::sin(y / static_cast<float>(height));
         } else {
-            return std::clamp(v.norm(), 0.0f, 1000.0f);
+            return std::clamp(v.norm(), 0.0f, 100.0f);
         }
     }
 };
@@ -193,6 +193,8 @@ __host__ Texture::Texture(const std::filesystem::path &path, bool isEnvMap, Eige
         dim = 3;
     }
 
+    std::cout << "Image dims " << image.width << " " << image.height << std::endl;
+
     image.inverseTransform = transform.inverse();
 
     assert(dim == 3);
@@ -216,7 +218,7 @@ __host__ __device__ float Texture::pdf(size_t idx) const noexcept {
             return 1.0f;
         case TextureType::IMAGE:
             if(idx == image.width * image.height - 1)
-                return 1.0f - image.cdf[idx];
+                return std::max(IMG_EPS, 1.0f - image.cdf[idx]);
             return std::max(IMG_EPS, image.cdf[idx + 1] - image.cdf[idx]);
         default:
             assert(false);
@@ -243,9 +245,7 @@ __host__ Texture Texture::DEFAULT() noexcept {
 }
 __host__ __device__ float Texture::pdf(const EmitterQueryRecord &emitterQueryRecord) const noexcept {
     const float pdf = this->pdf(emitterQueryRecord.idx);
-    if(pdf == 0.0f) return IMG_EPS;
-    const float k = 2 * std::sin(M_PIf * emitterQueryRecord.uv[1]);
-    if(k < IMG_EPS) return IMG_EPS;
+    const float k = std::max(IMG_EPS, 2 * std::sin(M_PIf * emitterQueryRecord.uv[1]));
     return pdf * M_1_PIf * M_1_PIf / k;
 }
 __host__ __device__ Color Texture::eval(const Ray &_ray) const noexcept {
@@ -269,12 +269,13 @@ __host__ __device__ Color Texture::sample(EmitterQueryRecord &emitterQueryRecord
             return constant;
         case TextureType::IMAGE:
             return [&]() -> Color {
-                const auto idx = sample::sampleCDF(sample[2], image.cdf, image.width * image.height);
+                auto idx = sample::sampleCDF(sample[2], image.cdf, image.width * image.height);
+
 
                 emitterQueryRecord.idx = idx;
 
-                const float u = (idx % image.width) / static_cast<float>(image.width),
-                            v = (idx / image.width) / static_cast<float>(image.height);
+                const float u = float(idx % image.width) / image.width,
+                            v = float(idx / image.width) / image.height;
 
                 assert(u >= 0 && u <= 1);
                 assert(v >= 0 && v <= 1);
@@ -283,12 +284,10 @@ __host__ __device__ Color Texture::sample(EmitterQueryRecord &emitterQueryRecord
                 //TODO handle image.inverseTransform rotation
                 const Vec3f dir = sample::squareToUniformSphere({u, v});
 
-                const float emitterDist = 1000000.0f;
 
-
-                emitterQueryRecord.point = emitterQueryRecord.point + dir * emitterDist;// Emitter at "infinite" distance
+                emitterQueryRecord.point = emitterQueryRecord.point + dir * EMITTER_DIST();// Emitter at "infinite" distance
                 emitterQueryRecord.wIn = -dir;
-                emitterQueryRecord.shadowRay = Ray{emitterQueryRecord.point, dir, 0.0f, emitterDist};
+                emitterQueryRecord.shadowRay = Ray{emitterQueryRecord.point, dir, RAY_EPSILON, 0.5f * EMITTER_DIST() - RAY_EPSILON};
                 emitterQueryRecord.uv = {u, v};
 
                 const float pdf = this->pdf(emitterQueryRecord);
@@ -300,4 +299,12 @@ __host__ __device__ Color Texture::sample(EmitterQueryRecord &emitterQueryRecord
             assert(false);
             return {0.0f, 0.0f, 0.0f};
     }
+}
+__host__ __device__ Color Texture::getConstant() const noexcept {
+    assert(type == TextureType::CONSTANT);
+    return constant;
+}
+__host__ Texture Texture::ONES() noexcept {
+    Texture t{Color::Ones()};
+    return t;
 }

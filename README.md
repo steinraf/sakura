@@ -19,7 +19,8 @@ or `make -j N` to make use of N threads
 
 The renderer launches a graphical interface that displays various elements of the scene.
 
-![Renderer GUI](renders/demo_car.png)
+![Renderer GUI Car](renders/demo_car.png)
+![Renderer GUI Cornell Box](renders/demo_cbox.png)
 
 ## Examples
 

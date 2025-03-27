@@ -147,6 +147,8 @@ public:
 private:
     void render() override;
 
+    float *weights;
+    Vec3f *colorBuffer;
     FeatureBuffer *buffer;
     Eigen::Vector2<unsigned int> size;
     std::string title;

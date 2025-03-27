@@ -33,6 +33,22 @@ BLAS::BLAS(const MeshDescriptorHost &meshDescriptor) noexcept
 __host__ __device__ AABB BLAS::getBoundingBox() const noexcept {
     return bvh->getBoundingBox();
 }
+__host__ __device__ float BLAS::pdfSurface(const ShapeQueryRecord &sqr) const noexcept {
+
+    return 1.0f / (bvh->getArea() * transform.linear().determinant());
+}
+__host__ __device__ void BLAS::sampleSurface(ShapeQueryRecord &sqr, const Vec3f &rng) const noexcept {
+    const Vec3f p = sample::squareToUniformTriangle({rng[0], rng[1]});
+    const auto triangle = bvh->sampleTriangle(rng[2]);
+    assert(triangle);
+
+
+    sqr.normal = transform.linear() * triangle->getNormal(p);
+    sqr.point = transform * triangle->getCoordinate(p);
+    sqr.uv = triangle->getUV(p);
+
+    sqr.pdf = pdfSurface(sqr);// TODO check if this should be pdf of triangle?
+}
 
 
 __device__ bool TLAS::intersect(const Ray &_ray, Intersection &its, bool isShadowRay) const noexcept {

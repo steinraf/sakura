@@ -6,10 +6,12 @@
 
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
+#include <thrust/transform_scan.h>
 
 #include "../geometry/intersection.cuh"
 #include "../geometry/ray.cuh"
 #include "../geometry/triangle.cuh"
+#include "../rng/sampler.cuh"
 #include "bvh.cuh"
 
 
@@ -45,8 +47,16 @@ __device__ __host__ AccelerationNode::AccelerationNode(Triangle *triangle,
     assert(isLeaf);
 }
 
-__device__ __host__ BVH::BVH(AccelerationNode *root, AABB boundingBox) noexcept
-    : root(root), boundingBox(std::move(boundingBox)) { assert(!this->boundingBox.isFaulty()); }
+__device__ __host__ BVH::BVH(Triangle *triangles,
+                             AccelerationNode *root,
+                             AABB boundingBox,
+                             float surfaceArea,
+                             float *cdf,
+                             size_t numTriangles) noexcept
+    : triangleBuffer(triangles), root(root), boundingBox(std::move(boundingBox)), surfaceArea(surfaceArea), cdf(cdf), numTriangles(numTriangles) {
+    assert(!this->boundingBox.isFaulty());
+    assert(numTriangles != 0);
+}
 
 [[nodiscard]] __device__ bool BVH::intersect(const Ray &ray, Intersection &its,
                                              bool isShadowRay) const noexcept {
@@ -110,6 +120,15 @@ __device__ __host__ BVH::BVH(AccelerationNode *root, AABB boundingBox) noexcept
 }
 __host__ __device__ AABB BVH::getBoundingBox() const noexcept {
     return boundingBox;
+}
+__host__ __device__ float BVH::getArea() const noexcept {
+    return surfaceArea;
+}
+__host__ __device__ Triangle *BVH::sampleTriangle(float rng) const noexcept {
+    assert(0 <= rng and rng <= 1);
+    const size_t idx = sample::sampleCDF(rng, cdf, numTriangles);
+    assert(idx < numTriangles);
+    return triangleBuffer + idx;
 }
 
 
@@ -297,6 +316,13 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
                                triangles.size() * sizeof(Triangle),
                                cudaMemcpyHostToDevice));
 
+    float totalArea = thrust::transform_reduce(
+            thrust::device, trias, trias + triangles.size(),
+            [=] __host__ __device__(const Triangle &t) -> float {
+                return t.getArea();
+            },
+            0.f, thrust::plus<float>());
+
     AABB boundingBox = thrust::transform_reduce(
             thrust::device, trias, trias + triangles.size(),
             [=] __host__ __device__(const Triangle &t) -> AABB {
@@ -353,6 +379,15 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
             bvhNodes, trias, triangles.size(), mortonCodes.data().get(),
             bvhConstructionDone);
 
+    float *cdf;
+    checkCudaErrors(cudaMallocManaged(&cdf, triangles.size() * sizeof(float)));
+    thrust::transform_inclusive_scan(
+            trias, trias + triangles.size(), cdf,
+            [=] __host__ __device__(const Triangle &t) -> float {
+                return t.getArea() / totalArea;
+            },
+            thrust::plus<float>());
+
     checkCudaErrors(cudaDeviceSynchronize());
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::high_resolution_clock::now() - start);
@@ -361,7 +396,13 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
     std::cout << "Built BVH in " << duration.count() << "ms\n";
 #endif
 
-    *bvh = BVH{bvhNodes, boundingBox};
+    *bvh = BVH{
+            trias,
+            bvhNodes,
+            boundingBox,
+            totalArea,
+            cdf,
+            triangles.size()};
 
     return bvh;
 }

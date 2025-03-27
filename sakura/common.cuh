@@ -28,6 +28,7 @@ class Sampler;
 struct Sensor;
 class Scene;
 class SceneBuilder;
+struct ShapeQueryRecord;
 class Texture;
 class TLAS;
 class Triangle;

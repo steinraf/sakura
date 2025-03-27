@@ -97,12 +97,9 @@ __host__ __device__ void Triangle::hitInformationSetter(
 
     const Eigen::Vector3f bary = {1.0f - u - v, u, v};
 
-    its.point = Eigen::Vector3f{bary[0] * p0 + bary[1] * p1 + bary[2] * p2};
-
-    its.uv = Eigen::Vector2f{bary[0] * uv0 + bary[1] * uv1 + bary[2] * uv2};
-
-
-    Vec3f normal = Eigen::Vector3f{bary[0] * n0 + bary[1] * n1 + bary[2] * n2};
+    its.point = getCoordinate(bary);
+    its.uv = getUV(bary);
+    Vec3f normal = getNormal(bary);
 
     //Flip normal if it is facing away from the ray
     if(normal.dot(r.dir) > 0) {
@@ -112,4 +109,16 @@ __host__ __device__ void Triangle::hitInformationSetter(
     }
 
     its.triangle = this;
+}
+__host__ __device__ float Triangle::getArea() const noexcept {
+    return 0.5f * (p1 - p0).cross(p2 - p0).norm();
+}
+__host__ __device__ Eigen::Vector3f Triangle::getCoordinate(const Vec3f &c) const noexcept {
+    return c[0] * p0 + c[1] * p1 + c[2] * p2;
+}
+__host__ __device__ Eigen::Vector3f Triangle::getNormal(const Vec3f &c) const noexcept {
+    return c[0] * n0 + c[1] * n1 + c[2] * n2;
+}
+__host__ __device__ Eigen::Vector2f Triangle::getUV(const Vec3f &c) const noexcept {
+    return c[0] * uv0 + c[1] * uv1 + c[2] * uv2;
 }

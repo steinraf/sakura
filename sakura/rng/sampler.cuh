@@ -39,6 +39,9 @@ namespace sample {
 
     [[nodiscard]] __host__ __device__ Eigen::Vector2f squareToUniformDisk(
             const Eigen::Vector2f &sample) noexcept;
+    
+    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToUniformTriangle(
+            const Eigen::Vector2f &sample) noexcept;
 
     [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToCosineHemisphere(
             const Eigen::Vector2f &sample) noexcept;
