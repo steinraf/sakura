@@ -1,10 +1,16 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.25.2)
 project(CustomRenderer LANGUAGES CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 17)
+
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 20)
+
 
 set(OIDN_NEURAL_RUNTIME DNNL)
 
@@ -29,8 +35,21 @@ include_directories(libs/freetype/include)
 
 include_directories(libs/glew-2.1.0/include)
 
+find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
+if (NOT WAYLAND_SCANNER_EXECUTABLE)
+    set(GLFW_BUILD_WAYLAND False)
+endif ()
 
+include(FetchContent)
 
+#find_package(glfw3 REQUIRED)
+# Download and build GLFW
+FetchContent_Declare(
+        glfw
+        GIT_REPOSITORY https://github.com/glfw/glfw.git
+        GIT_TAG 3.4
+)
+FetchContent_MakeAvailable(glfw)
 
 
 add_library(pugixml STATIC libs/pugixml/src/pugixml.cpp)
