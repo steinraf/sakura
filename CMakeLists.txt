@@ -5,6 +5,8 @@ project(CustomRenderer LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
+set(OIDN_NEURAL_RUNTIME DNNL)
+find_package(TBB REQUIRED)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -12,9 +14,18 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)
 
 
-set(OIDN_NEURAL_RUNTIME DNNL)
-
 find_package(TBB REQUIRED)
+
+
+include(FindCUDA/select_compute_arch)
+CUDA_DETECT_INSTALLED_GPUS(INSTALLED_GPU_CCS_1)
+string(STRIP "${INSTALLED_GPU_CCS_1}" INSTALLED_GPU_CCS_2)
+string(REPLACE " " ";" INSTALLED_GPU_CCS_3 "${INSTALLED_GPU_CCS_2}")
+string(REPLACE "." "" CUDA_ARCH_LIST "${INSTALLED_GPU_CCS_3}")
+SET(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
+
+message("COMPILING FOR CUDA_ARCH_LIST: " "${CUDA_ARCH_LIST}")
+
 
 
 
@@ -22,9 +33,11 @@ include_directories(libs/pugixml/src)
 include_directories(libs/oneTBB)
 include_directories(libs/oneTBB/include)
 
-add_subdirectory(libs/OpenImageDenoise)
 
+add_subdirectory(libs/OpenImageDenoise)
 include_directories(libs/OpenImageDenoise/include)
+
+
 include_directories(libs/ImGui)
 include_directories(libs/ImGui/backends)
 include_directories(libs/pngwriter/src)
@@ -54,6 +67,13 @@ FetchContent_MakeAvailable(glfw)
 
 add_library(pugixml STATIC libs/pugixml/src/pugixml.cpp)
 
+include(CheckLanguage)
+check_language(CUDA)
+if (CMAKE_CUDA_COMPILER)
+    enable_language(CUDA)
+
+    include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+endif ()
 
 include_directories(libs/stb)
 include_directories(libs/ImGui)
@@ -93,37 +113,41 @@ add_executable(CustomRenderer
 
 
         main.cu
-        src/utility/vector.h
-        src/cudaHelpers.cu
-        src/cudaHelpers.h
-        src/scene/scene.cu
-        src/scene/scene.h
-        src/utility/ray.h
-        src/hittable.h
-        src/camera/camera.cu
-        src/camera/camera.h
-        src/utility/warp.h
-        src/utility/sampler.h
-        src/acceleration/bvh.h
-        src/shapes/triangle.h
-        src/utility/meshLoader.h
-        src/utility/meshLoader.cu
-        src/bsdf.h
-        src/acceleration/aabb.h
-        src/scene/sceneLoader.h
-        src/emitters/areaLight.h
-        src/emitters/areaLight.cu
-        src/utility/frame.h
-        src/textures/imageTexture.cu
-        src/textures/imageTexture.h
-        src/emitters/environmentEmitter.h
-        src/shapes/triangle.cu
-        src/medium/medium.h
-        src/medium/medium.cu
-        src/medium/isotropicPhaseFunction.cu
-        src/medium/isotropicPhaseFunction.h
-        src/denoise/denoise.cu
-        src/denoise/denoise.h)
+        src_old/utility/vector.cuh
+        src_old/cudaHelpers.cu
+        src_old/cudaHelpers.cuh
+        src_old/scene/scene.cu
+        src_old/scene/scene.h
+        src_old/utility/ray.h
+        src_old/hittable.h
+        src_old/camera/camera.cu
+        src_old/camera/camera.h
+        src_old/utility/warp.h
+        src_old/utility/sampler.h
+        src_old/acceleration/bvh.h
+        src_old/shapes/triangle.h
+        src_old/utility/meshLoader.h
+        src_old/utility/meshLoader.cu
+        src_old/bsdf.h
+        src_old/acceleration/aabb.h
+        src_old/scene/sceneLoader.h
+        src_old/emitters/areaLight.h
+        src_old/emitters/areaLight.cu
+        src_old/utility/frame.h
+        src_old/textures/imageTexture.cu
+        src_old/textures/imageTexture.h
+        src_old/emitters/environmentEmitter.h
+        src_old/shapes/triangle.cu
+        src_old/medium/medium.h
+        src_old/medium/medium.cu
+        src_old/medium/isotropicPhaseFunction.cu
+        src_old/medium/isotropicPhaseFunction.h
+        src_old/denoise/denoise.cu
+        src_old/denoise/denoise.h
+
+        src/gui/gui.cpp
+        src_old/utility/vector.cu
+)
 
 add_dependencies(CustomRenderer pugixml)
 

@@ -24,6 +24,7 @@ or `make -j 6` to make use of 6 threads
 in case the Cuda compiler is not found, add 
 ``` -DCMAKE_CUDA_COMPILER:FILEPATH=/usr/local/cuda-12.2/bin/nvcc ``` (or the path to your nvcc) to the cmake command.
 
+if there are errors related to external libraries, try running `git submodule update --remote`
 
 To run the script from the root folder, run the command
 
