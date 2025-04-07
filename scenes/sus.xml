@@ -6,8 +6,8 @@
 
 	<sensor type="perspective">
 		<float name="fov" value="27.7856"/>
-<!--		<float name="aperture_radius" value="1.7"/>-->
-<!--		<float name="focus_distance" value="5.6"/>-->
+		<!--		<float name="aperture_radius" value="1.7"/>-->
+		<!--		<float name="focus_distance" value="5.6"/>-->
 
 
 		<transform name="to_world">
@@ -18,19 +18,18 @@
 
 		<sampler type="independent">
 			<integer name="sample_count" value="1024"/>
+			<!--			<integer name="sample_count" value="32"/>-->
 		</sampler>
 
 		<film type="hdrfilm">
-<!--			<integer name="height" value="216"/>-->
-<!--			<integer name="width" value="384"/>-->
-<!--			<integer name="height" value="2160"/>-->
-<!--			<integer name="width" value="3840"/>-->
-			<integer name="height" value="1080"/>
-			<integer name="width" value="1920"/>
-<!--			<integer name="height" value="600"/>-->
-<!--			<integer name="width" value="800"/>-->
-<!--			<integer name="height" value="2400"/>-->
-<!--			<integer name="width" value="3200"/>-->
+			<!--			<integer name="height" value="216"/>-->
+			<!--			<integer name="width" value="384"/>-->
+			<!--			<integer name="height" value="2160"/>-->
+			<!--			<integer name="width" value="3840"/>-->
+			<integer name="height" value="600"/>
+			<integer name="width" value="800"/>
+			<!--			<integer name="height" value="2400"/>-->
+			<!--			<integer name="width" value="3200"/>-->
 		</film>
 
 	</sensor>
@@ -38,7 +37,7 @@
 
 	<shape type="obj">
 		<string name="filename" value="scenes/obj/walls.obj"/>
-<!--		<string name="texture" value="scenes/envmap/chapel.hdr"/>-->
+		<!--		<string name="texture" value="scenes/envmap/chapel.hdr"/>-->
 
 		<bsdf type="diffuse">
 			<rgb name="reflectance" value="0.725, 0.71, 0.68"/>
@@ -91,7 +90,7 @@
 			<translate value="0.445800, 0, 0"/>
 		</transform>
 
-<!--		<string name="texture" value="scenes/envmap/beach.hdr"/>-->
+		<!--		<string name="texture" value="scenes/envmap/beach.hdr"/>-->
 
 		<bsdf type="diffuse">
 			<rgb name="reflectance" value="0.630, 0.065, 0.05"/>
