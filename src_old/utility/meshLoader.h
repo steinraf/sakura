@@ -6,10 +6,8 @@
 
 #include <filesystem>
 #include <fstream>
-
 #include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
-#include <thrust/sort.h>
+
 
 #include "../acceleration/bvh.h"
 #include "../cudaHelpers.cuh"
@@ -17,31 +15,11 @@
 #include "vector.cuh"
 
 
-struct TriangleIndexList {
-    thrust::host_vector<int> first;
-    thrust::host_vector<int> second;
-    thrust::host_vector<int> third;
-};
+struct TriangleIndexList;
 
-struct HostMeshInfo {
-    thrust::host_vector<Vector3f> vertices;
-    thrust::host_vector<Vector2f> textures;
-    thrust::host_vector<Vector3f> normals;
-    TriangleIndexList vertexIndices;
-    TriangleIndexList textureIndices;
-    TriangleIndexList normalsIndices;
-};
+struct HostMeshInfo;
 
-struct DeviceMeshInfo {
-    thrust::device_vector<Triangle> triangles;
-    thrust::device_vector<uint32_t> mortonCodes;
-    thrust::device_vector<float> areaCDF;
-    float totalArea;
-
-    [[nodiscard]] auto toTuple() const noexcept {
-        return std::tuple{triangles, mortonCodes, areaCDF, totalArea};
-    }
-};
+struct DeviceMeshInfo;
 
 
 HostMeshInfo loadMesh(const std::filesystem::path &filePath, const Matrix4f &transform) noexcept(false);
@@ -50,7 +28,7 @@ DeviceMeshInfo meshToGPU(const HostMeshInfo &mesh) noexcept;
 
 struct TriaToAABB {
     __host__ __device__ constexpr AABB operator()(const Triangle &tria) const noexcept {
-        return tria.boundingBox;
+        return tria.getAABB();
     }
 };
 
@@ -98,7 +76,7 @@ struct TriangleToMortonCode {
 
     __device__ constexpr uint32_t operator()(const Triangle &tria) const noexcept {
         int numBits = 10;
-        const Vector3f normalized = static_cast<float>(1u << numBits) * (tria.boundingBox.getCenter() - lower) / dims;
+        const Vector3f normalized = static_cast<float>(1u << numBits) * (tria.getAABB().getCenter() - lower) / dims;
 
         assert(normalized[0] >= 0 && normalized[1] >= 0 && normalized[2] >= 0);
         assert(normalized[0] <= (1u << numBits) && normalized[1] <= (1u << numBits) &&

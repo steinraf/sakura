@@ -9,7 +9,6 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <thrust/extrema.h>
 
 #include <cuda_runtime.h>
 
@@ -130,6 +129,10 @@ public:
     }
 
     [[nodiscard]] __host__ __device__ constexpr inline Vector3f gammaCorrected() const noexcept;
+
+    [[nodiscard]] __host__ __device__ constexpr static inline Vector3f Zero() noexcept {
+        return {0.f, 0.f, 0.f};
+    }
 
     __device__ static inline void atomicCudaAdd(Vector3f *address, const Vector3f &vec) noexcept;
 
@@ -462,9 +465,9 @@ __host__ __device__ constexpr inline Vector3f &Vector3f::clamp(float minimum, fl
 
 __host__ __device__ constexpr inline Vector3f Vector3f::absValues() const noexcept {
     return {
-            abs(data[0]),
-            abs(data[1]),
-            abs(data[2])
+            std::abs(data[0]),
+            std::abs(data[1]),
+            std::abs(data[2])
     };
 }
 

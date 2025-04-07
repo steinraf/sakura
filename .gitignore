@@ -4,7 +4,6 @@ cmake-build-relwithdebinfo
 cmake-build-primerunrelease
 cmake-build-primerundebug
 .idea
-data/*
 tmp/*
 scenes/tmp/*
 scenes/envmap/highres/*

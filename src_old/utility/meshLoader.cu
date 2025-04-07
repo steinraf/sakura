@@ -6,6 +6,36 @@
 #include "vector.cuh"
 #include <thrust/transform_scan.h>
 
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
+#include <thrust/sort.h>
+
+struct TriangleIndexList {
+    thrust::host_vector<int> first;
+    thrust::host_vector<int> second;
+    thrust::host_vector<int> third;
+};
+
+struct HostMeshInfo {
+    thrust::host_vector<Vector3f> vertices;
+    thrust::host_vector<Vector2f> textures;
+    thrust::host_vector<Vector3f> normals;
+    TriangleIndexList vertexIndices;
+    TriangleIndexList textureIndices;
+    TriangleIndexList normalsIndices;
+};
+
+struct DeviceMeshInfo {
+    thrust::device_vector<Triangle> triangles;
+    thrust::device_vector<uint32_t> mortonCodes;
+    thrust::device_vector<float> areaCDF;
+    float totalArea;
+
+    [[nodiscard]] auto toTuple() const noexcept {
+        return std::tuple{triangles, mortonCodes, areaCDF, totalArea};
+    }
+};
+
 HostMeshInfo loadMesh(const std::filesystem::path &filePath, const Matrix4f &transform) noexcept(false) {
 
     std::cout << "Reading mesh " + filePath.filename().string() + " ...\n";
@@ -219,7 +249,7 @@ DeviceMeshInfo meshToGPU(const HostMeshInfo &mesh) noexcept {
     thrust::transform(deviceTriangles.begin(), deviceTriangles.end(), mortonCodes.begin(),
                       triangleToMortonCode);
 
-    thrust::sort_by_key(mortonCodes.begin(), mortonCodes.end(), deviceTriangles.begin());
+    thrust::sort_by_key(thrust::device, mortonCodes.begin(), mortonCodes.end(), deviceTriangles.data());
     //TODO maybe use radix sort
 
     return {deviceTriangles, mortonCodes, areaCDF, totalTriaArea};

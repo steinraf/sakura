@@ -6,6 +6,7 @@
 #include "imageTexture.h"
 #include <thrust/device_vector.h>
 #include <thrust/transform_scan.h>
+#include <thrust/transform_reduce.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"

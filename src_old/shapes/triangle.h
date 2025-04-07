@@ -44,8 +44,7 @@ public:
             const Vector3f &n0, const Vector3f &n1, const Vector3f &n2) noexcept
         : p0(p0), p1(p1), p2(p2),
           uv0(uv0), uv1(uv1), uv2(uv2),
-          n0(n0), n1(n1), n2(n2),
-          boundingBox(p0, p1, p2) {
+          n0(n0), n1(n1), n2(n2){
     }
 
     //Nori Triangle Ray3f intersect
@@ -115,9 +114,11 @@ public:
         return bary[0] * n0 + bary[1] * n1 + bary[2] * n2;
     }
 
-    Vector3f p0, p1, p2;
-    Vector2f uv0, uv1, uv2;
-    Vector3f n0, n1, n2;
+    [[nodiscard]] __device__ constexpr inline AABB getAABB() const noexcept {
+        return AABB{p0, p1, p2};
+    }
 
-    AABB boundingBox;
+    Vector3f p0, p1, p2;
+    Vector3f n0, n1, n2;
+    Vector2f uv0, uv1, uv2;
 };

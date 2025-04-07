@@ -55,42 +55,7 @@ namespace cudaHelpers {
 
     __device__ int delta(int a, int b, unsigned int n, const unsigned int *c, unsigned int ka);
 
-    __forceinline__ __device__ thrust::pair<int, int>
-    determineRange(const uint32_t *mortonCodes, int numPrimitives, int i) {
-        const unsigned int *c = mortonCodes;
-        const unsigned int ki = c[i];// key of i
-
-        // determine direction of the range (+1 or -1)
-        const int delta_l = delta(i, i - 1, numPrimitives, c, ki);
-        const int delta_r = delta(i, i + 1, numPrimitives, c, ki);
-
-        const auto [d, delta_min] = [&]() -> const thrust::pair<int, int> {
-            if(delta_r < delta_l)
-                return thrust::pair{-1, delta_r};
-            else
-                return thrust::pair{1, delta_l};
-        }();
-
-        // compute upper bound of the length of the range
-        unsigned int l_max = 2;
-        while(delta(i, i + l_max * d, numPrimitives, c, ki) > delta_min) {
-            l_max <<= 1;
-        }
-
-        // find other end using binary search
-        unsigned int l = 0;
-        for(unsigned int t = l_max >> 1; t > 0; t >>= 1) {
-            if(delta(i, i + (l + t) * d, numPrimitives, c, ki) > delta_min) {
-                l += t;
-            }
-        }
-        const int j = i + l * d;
-
-        //        printf("Stats of range are i=%i, j=%i, l=%i, d=%i\n", i, j, l, d);
-
-        // ensure i <= j
-        return {std::min(i, j), std::max(i, j)};
-    }
+    __device__ std::pair<int, int> determineRange(const uint32_t *mortonCodes, int numPrimitives, int i);
 
 
     __global__ void constructBVH(AccelerationNode *bvhNodes, Triangle *primitives, const uint32_t *mortonCodes, int numPrimitives);

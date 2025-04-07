@@ -5,8 +5,7 @@ project(CustomRenderer LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-set(OIDN_NEURAL_RUNTIME DNNL)
-find_package(TBB REQUIRED)
+
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -14,7 +13,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)
 
 
-find_package(TBB REQUIRED)
+
 
 
 include(FindCUDA/select_compute_arch)
@@ -26,7 +25,9 @@ SET(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
 
 message("COMPILING FOR CUDA_ARCH_LIST: " "${CUDA_ARCH_LIST}")
 
+SET(OIDN_DEVICE_CUDA ON CACHE BOOL "Enable CUDA Device")
 
+find_package(TBB REQUIRED)
 
 
 include_directories(libs/pugixml/src)
@@ -36,6 +37,7 @@ include_directories(libs/oneTBB/include)
 
 add_subdirectory(libs/OpenImageDenoise)
 include_directories(libs/OpenImageDenoise/include)
+
 
 
 include_directories(libs/ImGui)
@@ -91,9 +93,6 @@ find_package(OpenMP REQUIRED)
 
 include_directories(${CMAKE_SOURCE_DIR}/includes)
 
-#set(CMAKE_CXX_FLAGS "-O3 -fopenmp -funroll-loops -DNO_FREETYPE -D_GLIBCXX_ASSERTIONS -fasynchronous-unwind-tables -fexceptions -fpie -Wl,-pie -fstack-clash-protection -fstack-protector-all -fstack-protector-strong -g -grecord-gcc-switches -fcf-protection -pipe -Wall -Werror -Wextra ")
-
-set(CMAKE_CUDA_FLAGS "-extended-lambda --expt-relaxed-constexpr -dopt=on -extra-device-vectorization --restrict --compiler-options -Wall")
 
 
 add_executable(CustomRenderer
@@ -115,39 +114,57 @@ add_executable(CustomRenderer
         main.cu
         src_old/utility/vector.cuh
         src_old/cudaHelpers.cu
-        src_old/cudaHelpers.cuh
         src_old/scene/scene.cu
-        src_old/scene/scene.h
         src_old/utility/ray.h
         src_old/hittable.h
         src_old/camera/camera.cu
-        src_old/camera/camera.h
         src_old/utility/warp.h
         src_old/utility/sampler.h
         src_old/acceleration/bvh.h
         src_old/shapes/triangle.h
-        src_old/utility/meshLoader.h
         src_old/utility/meshLoader.cu
         src_old/bsdf.h
         src_old/acceleration/aabb.h
         src_old/scene/sceneLoader.h
-        src_old/emitters/areaLight.h
         src_old/emitters/areaLight.cu
         src_old/utility/frame.h
         src_old/textures/imageTexture.cu
-        src_old/textures/imageTexture.h
         src_old/emitters/environmentEmitter.h
         src_old/shapes/triangle.cu
-        src_old/medium/medium.h
         src_old/medium/medium.cu
         src_old/medium/isotropicPhaseFunction.cu
-        src_old/medium/isotropicPhaseFunction.h
         src_old/denoise/denoise.cu
-        src_old/denoise/denoise.h
 
         src/gui/gui.cpp
         src_old/utility/vector.cu
+        src/gui/viewport.cu
+        src/statistics/statistics.h
+        src/common.h
 )
+
+target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+        -O3
+        --extended-lambda
+        --expt-relaxed-constexpr
+        -fopenmp
+        -funroll-loops
+        -DNO_FREETYPE
+        -D_GLIBCXX_ASSERTIONS
+        -fasynchronous-unwind-tables
+        -fexceptions
+        -fpie
+        -Wl,-pie
+        -fstack-clash-protection
+        -fstack-protector-all
+        -fstack-protector-strong
+        -g
+        -grecord-gcc-switches
+        -fcf-protection
+        -pipe
+        -Wall
+        >)
+
+set_property(TARGET ${PROJECT_NAME} PROPERTY "${CUDA_ARCH_LIST}")
 
 add_dependencies(CustomRenderer pugixml)
 
@@ -156,5 +173,5 @@ set_target_properties(CustomRenderer PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 
 
-target_link_libraries(CustomRenderer PRIVATE glfw GL GLEW X11 pthread pugixml OpenImageDenoise PNGwriter::PNGwriter TBB ${OPENEXR_LIBRARIES})
+target_link_libraries(CustomRenderer PRIVATE ${CUDA_LIBRARIES} glfw GL GLEW X11 OpenMP::OpenMP_CXX pugixml OpenImageDenoise PNGwriter::PNGwriter tbb ${OPENEXR_LIBRARIES} )
 

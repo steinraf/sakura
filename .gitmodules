@@ -15,10 +15,6 @@
 	path = libs/pugixml
 	url = git@github.com:zeux/pugixml.git
 
-[submodule "libs/oneTBB"]
-	path = libs/oneTBB
-	url = git@github.com:oneapi-src/oneTBB.git
-
 [submodule "libs/pngwriter"]
 	path = libs/pngwriter
 	url = git@github.com:pngwriter/pngwriter.git

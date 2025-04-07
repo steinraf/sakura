@@ -42,7 +42,7 @@ public:
             }else{
 
 #ifndef NDEBUG
-                if((deviceCDF[idx+1] - deviceCDF[idx]) < FLT_EPSILON){
+                if((deviceCDF[idx+1] - deviceCDF[idx]) < TEXTURE_EPSILON){
                     printf("CDF SMALLER THAN EPSILON! %f\n", deviceCDF[idx+1] - deviceCDF[idx]);
 //                    assert(false);
                 }

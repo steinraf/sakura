@@ -8,7 +8,6 @@
 #include "../utility/vector.cuh"
 
 #include <cuda/std/limits>
-#include <thrust/extrema.h>
 
 
 struct AABB {

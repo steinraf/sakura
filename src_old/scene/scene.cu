@@ -13,6 +13,8 @@
 
 #include <OpenImageDenoise/oidn.hpp>
 
+#include <thrust/transform_reduce.h>
+
 
 __host__ Scene::Scene(SceneRepresentation &&sceneRepr, Device dev) : sceneRepresentation(sceneRepr),
                                                                      imageBufferByteSize(sceneRepr.sceneInfo.width * sceneRepr.sceneInfo.height * sizeof(Vector3f)),
@@ -283,18 +285,17 @@ __host__ void Scene::denoise() {
     checkCudaErrors(cudaMalloc(&varianceCopy, imageBufferByteSize));
     checkCudaErrors(cudaMemcpy(varianceCopy, deviceFeatureBuffer.variances, imageBufferByteSize, cudaMemcpyDeviceToDevice));
     cudaHelpers::applyGaussian<<<blockSize, threadSize>>>(varianceCopy, deviceFeatureBuffer.variances, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height, 0.3f, 21);
+
+    checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaFree(varianceCopy));
 
 
-    //    denoise<<<blockSize, threadSize>>>(deviceImageBuffer, deviceImageBufferDenoised, deviceFeatureBuffer, deviceWeights, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height, sceneRepresentation.cameraInfo.origin);
-    //    checkCudaErrors(cudaDeviceSynchronize());
+//        denoise<<<blockSize, threadSize>>>(deviceImageBuffer, deviceImageBufferDenoised, deviceFeatureBuffer, deviceWeights, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height, sceneRepresentation.cameraInfo.origin);
+//        checkCudaErrors(cudaDeviceSynchronize());
     //    denoiseApplyWeights<<<blockSize, threadSize>>>(deviceImageBufferDenoised, deviceWeights, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
     //    checkCudaErrors(cudaDeviceSynchronize());
     //    checkCudaErrors(cudaMemcpy(hostImageBufferDenoised, deviceImageBufferDenoised,
     //                               imageBufferByteSize, cudaMemcpyDeviceToHost));
-
-
-
 
     checkCudaErrors(cudaFree(deviceWeights));
 
@@ -304,6 +305,17 @@ __host__ void Scene::denoise() {
 
     auto oidnDevice = oidn::newDevice();
     oidnDevice.commit();
+
+    auto numDev = oidn::getNumPhysicalDevices();
+    if(numDev == 0){
+        std::cerr << "No OIDN devices found.\n";
+    }
+
+    const char* errorMessage;
+    if (oidnDevice.getError(errorMessage) != oidn::Error::None){
+        std::cerr << "OIDN Error: " << errorMessage << '\n';
+        return;
+    }
 
     int width = sceneRepresentation.sceneInfo.width;
     int height = sceneRepresentation.sceneInfo.height;
@@ -327,9 +339,8 @@ __host__ void Scene::denoise() {
 
     filter.execute();
 
-    const char* errorMessage;
     if (oidnDevice.getError(errorMessage) != oidn::Error::None)
-        std::cerr << "Error: " << errorMessage << '\b';
+        std::cerr << "Error: " << errorMessage << '\n';
 
 
     std::cout << "\rDenoising took " << ((double) (clock() - startDenoise)) / CLOCKS_PER_SEC << " seconds.\n";

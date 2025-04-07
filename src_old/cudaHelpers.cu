@@ -8,6 +8,8 @@
 #include "bsdf.h"
 #include "utility/ray.h"
 
+#include <thrust/pair.h>
+
 
 #include <iostream>
 
@@ -76,7 +78,7 @@ namespace cudaHelpers {
                 nullptr,
                 nullptr,
                 &primitives[i],
-                primitives[i].boundingBox,
+                primitives[i].getAABB(),
                 true,
         };
 
@@ -178,8 +180,8 @@ namespace cudaHelpers {
         const float constant = 0.f;//std::exp(alpha * windowRadius * windowRadius);
 
 
-        auto gaussian = [alpha, constant] __device__ (float x){
-            return CustomRenderer::max(0.0f, std::exp(alpha * x * x) - constant);
+        auto gaussian = [alpha, constant] __device__ (float xSq){
+            return CustomRenderer::max(0.0f, std::exp(alpha * xSq) - constant);
         };
 
         float integral = 0.f;
@@ -191,7 +193,7 @@ namespace cudaHelpers {
             for(int yNew = -windowRadius; yNew <= windowRadius; ++yNew){
                 if(j + yNew < 0 || j + yNew >= height) continue;
 
-                const float gaussianContrib = gaussian(sqrtf(xNew*xNew + yNew*yNew));
+                const float gaussianContrib = gaussian(xNew*xNew + yNew*yNew);
                 tmp += gaussianContrib * input[(j+yNew)*width + i+xNew];
                 integral += gaussianContrib;
             }
@@ -252,6 +254,43 @@ namespace cudaHelpers {
         // clz = count leading zeros
         return __clz(ka ^ kb);
     }
+
+    __device__ std::pair<int, int> determineRange(const uint32_t *mortonCodes, int numPrimitives, int i){
+        const unsigned int *c = mortonCodes;
+        const unsigned int ki = c[i];// key of i
+
+        // determine direction of the range (+1 or -1)
+        const int delta_l = delta(i, i - 1, numPrimitives, c, ki);
+        const int delta_r = delta(i, i + 1, numPrimitives, c, ki);
+
+        const auto [d, delta_min] = [&]() -> const thrust::pair<int, int> {
+            if(delta_r < delta_l)
+                return thrust::pair{-1, delta_r};
+            else
+                return thrust::pair{1, delta_l};
+        }();
+
+        // compute upper bound of the length of the range
+        unsigned int l_max = 2;
+        while(delta(i, i + l_max * d, numPrimitives, c, ki) > delta_min) {
+            l_max <<= 1;
+        }
+
+        // find other end using binary search
+        unsigned int l = 0;
+        for(unsigned int t = l_max >> 1; t > 0; t >>= 1) {
+            if(delta(i, i + (l + t) * d, numPrimitives, c, ki) > delta_min) {
+                l += t;
+            }
+        }
+        const int j = i + l * d;
+
+        //        printf("Stats of range are i=%i, j=%i, l=%i, d=%i\n", i, j, l, d);
+
+        // ensure i <= j
+        return std::make_pair(std::min(i, j), std::max(i, j));
+    }
+
 
     __global__ void render(Vector3f *output, Camera cam, TLAS *tlas, int width, int height, int numSubsamples,
                            int maxRayDepth, curandState *globalRandState, FeatureBuffer featureBuffer, unsigned *progressCounter) {

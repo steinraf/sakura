@@ -9,6 +9,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"
+#include "viewport.cuh"
 
 #include <GL/glew.h>
 #include <cuda_gl_interop.h>
@@ -60,6 +61,7 @@ GUI::GUI(const GUIConfig &config) {
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    io.IniFilename = nullptr;
 
     ImGui::StyleColorsDark();
 
@@ -88,11 +90,54 @@ void GUI::loop(Scene &scene) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        const ImGuiViewport *viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+
+        static ImGuiDockNodeFlags dockspaceFlags = ImGuiDockNodeFlags_PassthruCentralNode;
+        static ImGuiWindowFlags windowFlags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoDecoration;
+
+        static std::unique_ptr<Viewport> renderer_viewport = std::make_unique<OpenGLViewport>(scene, scene.getDimensions().x, scene.getDimensions().y, "Sakura Main" );;
+
+
+
+        const std::string debugTitle = "Debug Info";
+
+        {
+            ImGui::Begin("DockSpace", nullptr, windowFlags);
+
+            ImGuiID dockspaceId = ImGui::GetID("BaseDockSpace");
+            ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockspaceFlags);
+
+            [[maybe_unused]] static bool initDockspace = [&]() {
+
+
+                ImGui::DockBuilderRemoveNode(dockspaceId);// clear any previous layout
+                ImGui::DockBuilderAddNode(dockspaceId, dockspaceFlags | ImGuiDockNodeFlags_DockSpace);
+                ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->Size);
+
+                ImGuiID dbg, output;
+
+
+                ImGui::DockBuilderSplitNode(dockspaceId, ImGuiDir_Left, 0.2f, &dbg, &output);
+                ImGui::DockBuilderDockWindow(debugTitle.c_str(), dbg);
+                ImGui::DockBuilderDockWindow(renderer_viewport->getTitle().c_str(), output);
+
+                ImGui::DockBuilderFinish(dockspaceId);
+                return true;
+            }();
+
+
+
+
+            ImGui::End();
+        }
+
         {
             static float f = 0.0f;
             static int counter = 0;
 
-            ImGui::Begin("Debug Info");
+            ImGui::Begin(debugTitle.c_str());
 
             ImGui::Text("Progress: %f percent", scene.getPercentage());
             auto now = std::chrono::high_resolution_clock ::now();
@@ -108,22 +153,10 @@ void GUI::loop(Scene &scene) {
         }
 
         {
-            ImGui::Begin("CUDA GPU Path Tracing");
+            ImGui::Begin(renderer_viewport->getTitle().c_str(), nullptr, ImGuiWindowFlags_NoDecoration);
 
             if(needsRender){
-                scene.step(1.f/CustomRenderer::min(ImGui::GetIO().Framerate, 1000.f));
-                //TODO add correct tonemapping for live preview
-                if(!scene.render()){
-                    needsRender = false;
-                    scene.denoise();
-                    scene.saveOutput();
-                    glfwSetWindowShouldClose(window, true);
-                }
-                const auto availableSize = ImVec2{
-                        ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x,
-                        ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y,
-                };
-                ImGui::Image(scene.hostImageTexture, availableSize);
+                renderer_viewport->renderFrame();
 
             }else{
                 const auto availableSize = ImVec2{
@@ -160,6 +193,8 @@ void GUI::loop(Scene &scene) {
             ImGui::End();
         }
 
+
+
         // Rendering
         ImGui::Render();
         int display_w, display_h;
@@ -168,7 +203,21 @@ void GUI::loop(Scene &scene) {
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+        if(ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            GLFWwindow *backup_current_context = glfwGetCurrentContext();
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+            glfwMakeContextCurrent(backup_current_context);
+        }else{
+            std::cerr << "ImGuiConfigFlags_ViewportsEnable not set. No multi window support.\n";
+        }
+
         glfwSwapBuffers(window);
+
+        if(renderer_viewport->isDone()){
+            glfwSetWindowShouldClose(window, true);
+            renderer_viewport->save();
+        }
     }
 }
 GUI::~GUI() {
