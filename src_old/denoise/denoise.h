@@ -13,4 +13,4 @@ __global__ void denoise(Vector3f *input, Vector3f *output, FeatureBuffer feature
 
 __global__ void denoiseApplyWeights(Vector3f *output, float *weights, int width, int height);
 
-__device__ void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBuffer &featureBuffer, float *weights,  int i, int j, int width, int height);
+GPU_ONLY void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBuffer &featureBuffer, float *weights,  int i, int j, int width, int height);

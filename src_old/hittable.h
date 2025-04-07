@@ -4,12 +4,12 @@
 
 #pragma once
 
+#include "../../src/common.h"
+
 #include "utility/frame.h"
 #include "utility/ray.h"
 #include "utility/vector.cuh"
 
-class BLAS;
-class Triangle;
 
 struct Intersection {
     Vector3f p;

@@ -184,30 +184,11 @@ bool Scene::render() {
 
     //TODO fix GPU drawing mode
 
-    volatile bool currentlyRendering = true;
-
-//    std::thread drawingThread;
-
-//    if(device == GPU) {
-//        drawingThread = std::thread{[this](Vector3f *v, volatile bool &render) {
-//                                        OpenGLDraw(v, render);
-//                                    },
-//                                    deviceImageBuffer, std::ref(currentlyRendering)};
-//    }
-
-
-//    std::cout << "Starting render...\n";
-
-//    std::cout << "Starting Rendering...";
-
-    clock_t startRender = clock();
-
-
     if(actualSamples >= sceneRepresentation.sceneInfo.samplePerPixel)
         return false;
 
     //Exponentially increasing number of samples
-    const auto samplesRemaining = CustomRenderer::clamp(1, 1, sceneRepresentation.sceneInfo.samplePerPixel - actualSamples);
+    const auto samplesRemaining = std::clamp(1, 1, sceneRepresentation.sceneInfo.samplePerPixel - actualSamples);
 //    auto samplesRemaining = CustomRenderer::min(CustomRenderer::max(1, actualSamples), );
 
     cudaHelpers::render<<<blockSize, threadSize>>>(deviceImageBuffer, deviceCamera, meshAccelerationStructure,
@@ -222,9 +203,6 @@ bool Scene::render() {
     actualSamples += samplesRemaining;
 
     checkCudaErrors(cudaMemcpy(hostImageBuffer, deviceImageBuffer, imageBufferByteSize, cudaMemcpyDeviceToHost));
-
-//    std::cout << "\rRendering took " << ((double) (clock() - startRender)) / CLOCKS_PER_SEC << " seconds.\n";
-
 
 #ifndef NDEBUG
 

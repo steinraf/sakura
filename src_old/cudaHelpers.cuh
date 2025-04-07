@@ -31,16 +31,11 @@ struct FeatureBufferAccumulator {
 
 
 
-#define checkCudaErrors(val) cudaHelpers::check_cuda((val), #val, __FILE__, __LINE__)
-
-
 
 namespace cudaHelpers {
 
 
     __device__ bool initIndices(int &i, int &j, int &pixelIndex, const int width, const int height) noexcept;
-
-    __host__ void check_cuda(cudaError_t result, char const *func, const char *file, int line);
 
 
     __global__ void initRng(int width, int height, curandState *randState);
@@ -68,7 +63,7 @@ namespace cudaHelpers {
 
     __global__ void freeVariables();
 
-     __device__ Color3f constexpr DirectMAS(const Ray3f &ray, TLAS *scene, Sampler &sampler) noexcept {
+     CPU_GPU_INLINE Color3f DirectMAS(const Ray3f &ray, TLAS *scene, Sampler &sampler) noexcept {
         Intersection its;
         if(!scene->rayIntersect(ray, its))
             return Color3f{0.f};
@@ -111,7 +106,7 @@ namespace cudaHelpers {
         return sample;
     }
 
-    __device__ Color3f constexpr DirectMIS(const Ray3f &ray, TLAS *scene, Sampler &sampler) {
+    CPU_GPU_CONSTEXPR Color3f DirectMIS(const Ray3f &ray, TLAS *scene, Sampler &sampler) {
         Intersection its;
         if(!scene->rayIntersect(ray, its))
             return Color3f{0.f};
@@ -186,7 +181,7 @@ namespace cudaHelpers {
         return sample + emsWeight * emsSample + masWeight * masSample;
     }
 
-    __device__ Color3f constexpr PathMAS(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler, FeatureBuffer &featureBuffer) noexcept {
+    CPU_GPU_CONSTEXPR Color3f PathMAS(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler, FeatureBuffer &featureBuffer) noexcept {
         Intersection its;
 
 
@@ -227,7 +222,7 @@ namespace cudaHelpers {
         }
     }
 
-    __device__ Color3f constexpr PathMIS(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler,
+    CPU_GPU_CONSTEXPR Color3f PathMIS(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler,
                                          FeatureBufferAccumulator &featureBuffer, size_t fbIndex) noexcept {
         Intersection its;
 
@@ -340,7 +335,7 @@ namespace cudaHelpers {
         }
     }
 
-    __device__ Color3f constexpr PathMISEnv(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler,
+    CPU_GPU_CONSTEXPR Color3f PathMISEnv(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler,
                                          FeatureBufferAccumulator &featureBuffer, size_t fbIndex) noexcept {
         Intersection its;
 
@@ -502,7 +497,7 @@ namespace cudaHelpers {
 
 
 
-    __device__ Color3f constexpr normalMapper(const Ray3f &ray, TLAS *scene, Sampler &sampler) noexcept {
+    CPU_GPU_CONSTEXPR Color3f normalMapper(const Ray3f &ray, TLAS *scene, Sampler &sampler) noexcept {
         Intersection its;
         Color3f Li{0.f};
         if(!scene->rayIntersect(ray, its))
@@ -512,7 +507,7 @@ namespace cudaHelpers {
         return its.shFrame.n.absValues();
     }
 
-    __device__ Color3f constexpr checkerboard(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler,
+    CPU_GPU_CONSTEXPR Color3f checkerboard(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler,
                                               FeatureBuffer &featureBuffer) noexcept {
         Intersection its;
 
@@ -527,19 +522,17 @@ namespace cudaHelpers {
         auto a = static_cast<int>(floorf(p[0]));
         auto b = static_cast<int>(floorf(p[1]));
 
-        auto mod = [] __device__ (int a, int b) -> int {
-            const int r = a % b;
 
-            return (r < 0) ? r + b : r;
-        };
+        const int reminder = (a + b) % 2;
+        const int mod = (reminder < 0) ? reminder + 2 : reminder;
 
-        if(mod(a + b, 2) == 0.0)
+        if(mod == 0.0)
             return m_value1;
 
         return m_value2;
     }
 
-    __device__ Color3f constexpr depthMapper(const Ray3f &ray, TLAS *scene, Sampler &sampler) noexcept {
+    CPU_GPU_CONSTEXPR Color3f depthMapper(const Ray3f &ray, TLAS *scene, Sampler &sampler) noexcept {
         Intersection its;
         Color3f Li{0.f};
         if(!scene->rayIntersect(ray, its))
@@ -549,7 +542,7 @@ namespace cudaHelpers {
     }
 
 
-    __device__ Color3f /* constexpr */ inline getColor(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler,
+    CPU_GPU_CONSTEXPR Color3f getColor(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler,
                                           FeatureBufferAccumulator &featureBuffer, size_t fbIndex) noexcept {
 
 

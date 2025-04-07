@@ -14,7 +14,7 @@
 
 namespace Warp {
 
-    [[nodiscard]] GPU_ONLY inline Vector3f sampleUniformHemisphere(Sampler &sampler, const Vector3f &pole) noexcept {
+    [[nodiscard]] CPU_GPU_INLINE Vector3f sampleUniformHemisphere(Sampler &sampler, const Vector3f &pole) noexcept {
         // Naive implementation using rejection sampling
         Vector3f v;
         do {

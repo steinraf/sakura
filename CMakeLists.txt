@@ -140,6 +140,7 @@ add_executable(CustomRenderer
         src/statistics/statistics.h
         src/emitters/environmentEmitter.cuh
         src/emitters/areaLight.cu
+        src/emitters/queryRecord.cuh
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:

@@ -94,6 +94,17 @@ private:
     Vector3f *deviceImageBufferDenoised;
     const size_t imageBufferByteSize;
 
+    struct OpenGLSharedBuffer{
+        GLuint texture;
+        cudaGraphicsResource_t resource;
+        FeatureBuffer *featureBuffer;
+        cudaSurfaceObject_t surface;
+    };
+
+//    OpenGLSharedBuffer hostImageBuffer;
+//    OpenGLSharedBuffer deviceImageBufferDenoised;
+
+
     Vector3f *hostImageBuffer;
     Vector3f *hostImageBufferDenoised;
 

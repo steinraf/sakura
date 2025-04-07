@@ -5,7 +5,6 @@
 #include "areaLight.cuh"
 
 #include "../../src_old/acceleration/bvh.h"
-#include "../../src_old/shapes/triangle.h"
 
 
 

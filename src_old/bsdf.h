@@ -11,7 +11,7 @@
 #include "utility/warp.h"
 
 //Nori Fresnel Term
-[[nodiscard]] __device__ constexpr float fresnel(float cosThetaI, float extIOR, float intIOR) noexcept {
+[[nodiscard]] CPU_GPU_CONSTEXPR float fresnel(float cosThetaI, float extIOR, float intIOR) noexcept {
     float etaI = extIOR, etaT = intIOR;
 
     if(extIOR == intIOR)
@@ -60,12 +60,12 @@ struct BSDFQueryRecord {
 
     EMeasure measure;
 
-    __device__ constexpr explicit BSDFQueryRecord(const Vector3f &wi) noexcept
+    CPU_GPU_CONSTEXPR explicit BSDFQueryRecord(const Vector3f &wi) noexcept
         : wi(wi), wo(0.f),
           uv(0.f), eta(1.0),
           measure(EUnknownMeasure) {}
 
-    __device__ constexpr BSDFQueryRecord(const Vector3f &wi, const Vector3f &wo, EMeasure measure) noexcept
+    CPU_GPU_CONSTEXPR BSDFQueryRecord(const Vector3f &wi, const Vector3f &wo, EMeasure measure) noexcept
         : wi(wi), wo(wo), uv(0.f), eta(1.0), measure(measure) {
     }
 };
@@ -84,11 +84,11 @@ public:
     Texture texture;
     float m_intIOR, m_extIOR;
 
-    __device__ __host__ constexpr BSDF() noexcept
+    CPU_GPU_CONSTEXPR BSDF() noexcept
         : material(Material::DIFFUSE), texture(Vector3f{1.f}), m_intIOR(1.5046f), m_extIOR(1.000277f) {
     }
 
-    __device__ __host__ constexpr BSDF(Material mat, Color3f albedo) noexcept
+    CPU_GPU_CONSTEXPR BSDF(Material mat, Color3f albedo) noexcept
         : material(mat), texture(albedo), m_intIOR(1.5046f), m_extIOR(1.000277f) {
     }
 
@@ -97,18 +97,18 @@ public:
     }
 
     //Overload to make nori-syntax possible
-    __device__ __host__ const BSDF* operator->() const noexcept {
+    CPU_GPU_CONSTEXPR const BSDF* operator->() const noexcept {
         return this;
     }
-    __device__ __host__ BSDF* operator->() noexcept {
+    CPU_GPU_CONSTEXPR BSDF* operator->() noexcept {
         return this;
     }
 
-    [[nodiscard]] __device__ constexpr Color3f getAlbedo(const Vector2f &uv) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR Color3f getAlbedo(const Vector2f &uv) const noexcept {
         return texture.eval(uv);
     }
 
-    [[nodiscard]] __device__ constexpr Color3f eval(const BSDFQueryRecord &bsdfQueryRecord) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR Color3f eval(const BSDFQueryRecord &bsdfQueryRecord) const noexcept {
         switch(material) {
             case Material::DIFFUSE:
                 if(bsdfQueryRecord.measure != ESolidAngle
@@ -118,13 +118,12 @@ public:
 
                 return texture.eval(bsdfQueryRecord.uv) * M_1_PIf;
             case Material::MIRROR:
-                return Color3f{0.f};
             case Material::DIELECTRIC:
                 return Color3f{0.f};
         }
     }
 
-    [[nodiscard]] __device__ constexpr float pdf(const BSDFQueryRecord &bsdfQueryRecord) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR float pdf(const BSDFQueryRecord &bsdfQueryRecord) const noexcept {
         switch(material) {
             case Material::DIFFUSE:
                 if(bsdfQueryRecord.measure != ESolidAngle || Frame::cosTheta(bsdfQueryRecord.wi) <= 0 || Frame::cosTheta(bsdfQueryRecord.wo) <= 0)
@@ -139,7 +138,7 @@ public:
     }
 
 
-    [[nodiscard]] __device__ constexpr Color3f sample(BSDFQueryRecord &bsdfQueryRecord, const Vector2f &sample) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR Color3f sample(BSDFQueryRecord &bsdfQueryRecord, const Vector2f &sample) const noexcept {
         switch(material) {
             case Material::DIFFUSE:
                 if(Frame::cosTheta(bsdfQueryRecord.wi) <= 0)
@@ -202,7 +201,7 @@ public:
         }
     }
 
-    [[nodiscard]] __host__ __device__ constexpr bool isDeltaDistribution() const noexcept{
+    [[nodiscard]] CPU_GPU_CONSTEXPR bool isDeltaDistribution() const noexcept{
             switch(material){
             break;case Material::DIFFUSE:
                 return false;

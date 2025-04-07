@@ -96,7 +96,7 @@ public:
         return false;
     }
 
-    __device__ void setHitInformation(const Ray3f &ray, Intersection &its) const noexcept;
+    CPU_GPU void setHitInformation(const Ray3f &ray, Intersection &its) const noexcept;
 
     [[nodiscard]] CPU_GPU_CONSTEXPR float getArea() const noexcept {
         return 0.5f * (p1 - p0).cross(p2 - p0).norm();

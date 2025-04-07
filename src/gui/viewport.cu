@@ -6,7 +6,6 @@
 
 #include "../../src_old/cudaHelpers.cuh"
 #include "../../src_old/scene/scene.h"
-#include "../common.h"
 #include "cuda_runtime.h"
 
 void Viewport::renderFrame(bool synchronize) {
@@ -14,8 +13,8 @@ void Viewport::renderFrame(bool synchronize) {
     if(synchronize) checkCudaErrors(cudaDeviceSynchronize());
 }
 void OpenGLViewport::render() {
-    scene.step(1.f/CustomRenderer::min(ImGui::GetIO().Framerate, 1000.f));
-    //TODO add correct tonemapping for live preview
+    scene.step(1.f/std::min(ImGui::GetIO().Framerate, 1000.f));
+    //TODO add correct tone mapping for live preview
     if(!scene.render()){
 
         is_rendering_done = true;

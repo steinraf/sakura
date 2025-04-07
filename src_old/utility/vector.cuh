@@ -12,29 +12,10 @@
 
 #include <cuda_runtime.h>
 
-
-namespace CustomRenderer {
-    template<typename T>
-    [[nodiscard]] __host__ __device__ constexpr __forceinline__ T max(const T &a, const T &b) noexcept {
-        return a < b ? b : a;
-    }
-
-    template<typename T>
-    [[nodiscard]] __host__ __device__ constexpr __forceinline__ T min(const T &a, const T &b) noexcept {
-        return a < b ? a : b;
-    }
-
-
-    template<typename T>
-    [[nodiscard]] __host__ __device__ constexpr __forceinline__ T clamp(const T &v, const T &mi, const T&ma) noexcept{
-        return max(min(ma, v), mi);
-    }
-}// namespace CustomRenderer
-
 namespace Warp{
     [[nodiscard]] __host__ __device__ constexpr float gammaCorrect(float value) noexcept {
-        if(value <= 0.0031308f) return CustomRenderer::clamp(12.92f * value, 0.f, 1.f);
-        return CustomRenderer::clamp(1.055f * std::pow(value, 1.f / 2.4f) - 0.055f, 0.f, 1.f);
+        if(value <= 0.0031308f) return std::clamp(12.92f * value, 0.f, 1.f);
+        return std::clamp(1.055f * std::pow(value, 1.f / 2.4f) - 0.055f, 0.f, 1.f);
     }
 }
 
@@ -465,9 +446,9 @@ __host__ __device__ constexpr inline Vector3f unit_vector(Vector3f v) {
 }
 
 __host__ __device__ constexpr inline Vector3f &Vector3f::clamp(float minimum, float maximum) noexcept {
-    data[0] = CustomRenderer::max(minimum, CustomRenderer::min(maximum, data[0]));
-    data[1] = CustomRenderer::max(minimum, CustomRenderer::min(maximum, data[1]));
-    data[2] = CustomRenderer::max(minimum, CustomRenderer::min(maximum, data[2]));
+    data[0] = std::max(minimum, std::min(maximum, data[0]));
+    data[1] = std::max(minimum, std::min(maximum, data[1]));
+    data[2] = std::max(minimum, std::min(maximum, data[2]));
     return *this;
 }
 
@@ -515,7 +496,7 @@ Vector3f::applyTransform(const Matrix4f &transform, bool isTranslationInvariant)
 }
 
 __host__ __device__ constexpr float Vector3f::maxCoeff() const noexcept {
-    return CustomRenderer::max(data[0], CustomRenderer::max(data[1], data[2]));
+    return std::max(data[0], std::max(data[1], data[2]));
 }
 
 [[nodiscard]] __host__ __device__ constexpr inline Vector3f Vector3f::gammaCorrected() const noexcept{
@@ -706,7 +687,7 @@ __host__ __device__ constexpr inline Vector2f unit_vector(Vector2f v) {
 }
 
 __host__ __device__ constexpr inline Vector2f &Vector2f::clamp(float minimum, float maximum) noexcept {
-    data[0] = CustomRenderer::max(minimum, CustomRenderer::min(maximum, data[0]));
-    data[1] = CustomRenderer::max(minimum, CustomRenderer::min(maximum, data[1]));
+    data[0] = std::max(minimum, std::min(maximum, data[0]));
+    data[1] = std::max(minimum, std::min(maximum, data[1]));
     return *this;
 }

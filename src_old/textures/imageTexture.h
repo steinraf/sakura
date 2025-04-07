@@ -34,7 +34,7 @@ public:
         : Texture(Vector3f{1.0f, 1.0f, 1.0f}) {
     }
 
-    [[nodiscard]] __device__ constexpr float pdf(size_t idx) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR float pdf(size_t idx) const noexcept {
         if(deviceTexture){
             if(idx == width*height - 1){
                 assert(1 - deviceCDF[idx] > 0);
@@ -48,7 +48,7 @@ public:
                 }
 #endif
 
-                return CustomRenderer::max(deviceCDF[idx+1] - deviceCDF[idx], TEXTURE_EPSILON);
+                return std::max(deviceCDF[idx+1] - deviceCDF[idx], TEXTURE_EPSILON);
             }
         }else{
             return 1.f;
@@ -56,7 +56,7 @@ public:
     }
 
 
-    [[nodiscard]] __device__ constexpr Color3f eval(const Vector2f &uv) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR Color3f eval(const Vector2f &uv) const noexcept {
         if(deviceTexture) {
 
 //            //Checkerboard
@@ -92,9 +92,9 @@ public:
             const auto w = static_cast<float>(width);
 
 
-            const float x = CustomRenderer::clamp(uv[0] * (w-1.f), 0.f, w-1.01f);
+            const float x = std::clamp(uv[0] * (w-1.f), 0.f, w-1.01f);
 
-            const float y = CustomRenderer::clamp(h - 2 - uv[1] * (h-1.f), 0.f, h-1.01f);
+            const float y = std::clamp(h - 2 - uv[1] * (h-1.f), 0.f, h-1.01f);
 
             const int x1 = std::floor(x), x2 = x1+1;
             const int y1 = std::floor(y), y2 = y1+1;
@@ -132,9 +132,9 @@ struct ColorToRadiance{
     __host__ __device__ constexpr float operator()(const Vector3f &vec) const noexcept {
         const size_t y = (&vec - first)%width;
         if(isEnvMap){
-            return CustomRenderer::clamp(vec.norm(), 0.f, 1000.f) * sin(y*1.f/height);
+            return std::clamp(vec.norm(), 0.f, 1000.f) * sin(y*1.f/height);
         }else{
-            return CustomRenderer::clamp(vec.norm(), 0.f, 1000.f);
+            return std::clamp(vec.norm(), 0.f, 1000.f);
         }
     }
 };
@@ -157,9 +157,9 @@ public:
     __host__ __device__ constexpr float operator()(const Vector3f &vec) const noexcept {
         const size_t y = (&vec - first)%width;
         if(isEnvMap){
-            return CustomRenderer::clamp(vec.norm(), 0.f, 1000.f) * sin(y*1.f/height) / totalArea;
+            return std::clamp(vec.norm(), 0.f, 1000.f) * sin(y*1.f/height) / totalArea;
         }else{
-            return CustomRenderer::clamp(vec.norm(), 0.f, 1000.f) / totalArea;
+            return std::clamp(vec.norm(), 0.f, 1000.f) / totalArea;
         }
     }
 };

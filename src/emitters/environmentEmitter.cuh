@@ -8,9 +8,10 @@
 
 #include "../../src_old/textures/imageTexture.h"
 
-#include "../../src_old/utility/ray.h"
 #include "../../src_old/utility/warp.h"
-#include "areaLight.cuh"
+
+#include "../../src/emitters/queryRecord.cuh"
+
 
 #define ENVIRONMENT_EPSILON 1e-6f
 
@@ -29,7 +30,7 @@ public:
         const Vector3f dir = ray.getDirection().normalized();
 
         const float u = atan2(dir[0], -dir[2]) * 0.5f * M_1_PIf;
-        const float v = CustomRenderer::clamp(acos(-dir[1]) * M_1_PIf, -1.f, 1.f);
+        const float v = std::clamp(acos(-dir[1]) * M_1_PIf, -1.f, 1.f);
 
         if(!::isfinite(u) || !::isfinite(v)){
 #ifndef NDEBUG
@@ -51,8 +52,6 @@ public:
         //TODO check if this actually needs 3d sample input or if 1d is sufficient
         if(!texture.deviceCDF)
             return texture.eval(Vector2f{});
-
-        //        const Vector3f dirSample = Warp::squareToUniformSphere(Vector2f{sample[0], sample[1]});
 
 
         const size_t idx = Warp::sampleCDF(sample[2], texture.deviceCDF, texture.deviceCDF + (texture.width * texture.height - 1));

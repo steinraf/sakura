@@ -8,18 +8,14 @@
 
 #include "../../src/common.h"
 
-#include "../../src/emitters/areaLight.cuh"
 #include "../../src/emitters/environmentEmitter.cuh"
-#include "../bsdf.h"
-#include "../hittable.h"
-#include "../utility/ray.h"
-#include "../shapes/triangle.h"
+#include "../../src/emitters/areaLight.cuh"
 
 struct AccelerationNode {
-    __device__ __host__ constexpr AccelerationNode() noexcept
+    CPU_GPU_CONSTEXPR AccelerationNode() noexcept
         : left(nullptr), right(nullptr), triangle(nullptr), boundingBox(AABB{}), isLeaf(false){};
 
-    __device__ __host__ constexpr AccelerationNode(AccelerationNode *left, AccelerationNode *right,
+    CPU_GPU_CONSTEXPR AccelerationNode(AccelerationNode *left, AccelerationNode *right,
                                                    Triangle *triangle, AABB boundingBox, bool isLeaf) noexcept
         : left(left), right(right), triangle(triangle), boundingBox(boundingBox), isLeaf(isLeaf) {
 
@@ -31,7 +27,7 @@ struct AccelerationNode {
         }
     }
 
-    [[nodiscard]] __device__ inline constexpr bool hasBoundingBox() const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR bool hasBoundingBox() const noexcept {
         return isLeaf || !boundingBox.isEmpty();
     }
 
@@ -68,7 +64,7 @@ public:
     Texture photonMap{Vector3f{0.f}};
     float totalArea;
 
-    __device__ constexpr explicit BLAS(AccelerationNode *bvhTotalNodes, float totalArea, const float *cdf,
+    CPU_GPU_CONSTEXPR explicit BLAS(AccelerationNode *bvhTotalNodes, float totalArea, const float *cdf,
                                        const size_t _numPrimitives, AreaLight *emitter, BSDF bsdf, Texture normalMap) noexcept
         : root(bvhTotalNodes), cdf(cdf), numPrimitives(_numPrimitives), emitter(emitter), bsdf(bsdf), firstTriangle(bvhTotalNodes[numPrimitives - 1].triangle), normalMap(normalMap), totalArea(totalArea){
 
@@ -81,7 +77,7 @@ public:
     }
 
 
-    __device__ constexpr BLAS &operator=(const BLAS &blas) noexcept {
+    CPU_GPU_CONSTEXPR BLAS &operator=(const BLAS &blas) noexcept {
 
         root = blas.root;
         cdf = blas.cdf;
@@ -93,9 +89,11 @@ public:
 
         firstTriangle = blas.firstTriangle;
 
+        normalMap = blas.normalMap;
+        photonMap = blas.photonMap;
         totalArea = blas.totalArea;
 
-        normalMap = blas.normalMap;
+
 
         if(emitter) {
             emitter->setBlas(this);
@@ -105,7 +103,7 @@ public:
     }
 
 
-    [[nodiscard]] __device__ constexpr Triangle *sample(float sampleValue) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR Triangle *sample(float sampleValue) const noexcept {
 
         const size_t idx = Warp::sampleCDF(sampleValue, cdf, cdf + numPrimitives);
 
@@ -115,7 +113,7 @@ public:
         return firstTriangle + idx;
     }
 
-    [[nodiscard]] __device__ bool
+    [[nodiscard]] CPU_GPU_CONSTEXPR bool
     rayIntersect(const Ray3f &_r, Intersection &its, bool isShadowRay = false) const noexcept {
         Ray3f r = _r;
         bool hasHit = false;
@@ -170,20 +168,20 @@ public:
         return hasHit;
     }
 
-    [[nodiscard]] __device__ constexpr const BSDF &getBSDF() const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR const BSDF &getBSDF() const noexcept {
         return bsdf;
     }
 
-    [[nodiscard]] __device__ constexpr AreaLight *getEmitter() const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR AreaLight *getEmitter() const noexcept {
         assert(emitter);
         return emitter;
     }
 
-    [[nodiscard]] __device__ constexpr float pdfSurface(const ShapeQueryRecord &sRec) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR float pdfSurface(const ShapeQueryRecord &sRec) const noexcept {
         return 1.f / totalArea;
     }
 
-    __device__ constexpr void sampleSurface(ShapeQueryRecord &shapeQueryRecord, const Vector3f &pointSample) const noexcept {
+    CPU_GPU_CONSTEXPR void sampleSurface(ShapeQueryRecord &shapeQueryRecord, const Vector3f &pointSample) const noexcept {
 
         const auto triangle = sample(pointSample[2]);
 
@@ -197,7 +195,7 @@ public:
         shapeQueryRecord.pdf = 1.f / totalArea;
     }
 
-    [[nodiscard]] __device__ constexpr bool isEmitter() const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR bool isEmitter() const noexcept {
         return emitter && emitter->isEmitter();
     }
 };
@@ -217,7 +215,7 @@ public:
     EnvironmentEmitter environmentEmitter;
 
 public:
-    __device__ constexpr TLAS(BLAS **meshBlasArr, int numBLAS,
+    CPU_GPU_CONSTEXPR TLAS(BLAS **meshBlasArr, int numBLAS,
                               BLAS **emitterBlasArr, int numEmitters,
                               EnvironmentEmitter environmentEmitter) noexcept
         : meshBlasArr(meshBlasArr), numMeshes(numBLAS),
@@ -226,13 +224,13 @@ public:
         printf("TLAS contains %i meshes and %i emitters.\n", numMeshes, numEmitters);
     }
 
-    [[nodiscard]] __device__ bool constexpr rayIntersect(const Ray3f &_r, Intersection &rec, bool isShadowRay = false) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR bool rayIntersect(const Ray3f &_r, Intersection &rec, bool isShadowRay = false) const noexcept {
         Ray3f r = _r;
 
 
         //Adaptive ray epsilon idea from nori
         if (r.minDist == EPSILON)
-            r.minDist = CustomRenderer::max(r.minDist, r.minDist * r.getOrigin().absValues().maxCoeff());
+            r.minDist = std::max(r.minDist, r.minDist * r.getOrigin().absValues().maxCoeff());
 
         Intersection record;
         bool hasHit = false;
@@ -246,10 +244,6 @@ public:
             }
         }
 
-//TMPDEBUG
-//        if(hasHit)
-//            assert(record.shFrame.n.isValid());
-
         for(int i = 0; i < numEmitters; ++i) {
             if(emitterBlasArr[i]->rayIntersect(r, record, isShadowRay)) {
                 if(isShadowRay)
@@ -259,21 +253,16 @@ public:
             }
         }
 
-//TMPDEBUG
-
-//        if(hasHit)
-//            assert(record.shFrame.n.isValid());
-
         rec = record;
         return hasHit;
     }
 
-    [[nodiscard]] __device__ bool rayIntersect(const Ray3f &_r) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR bool rayIntersect(const Ray3f &_r) const noexcept {
         Intersection its;
         return rayIntersect(_r, its, true);
     }
 
-    [[nodiscard]] __device__ constexpr AreaLight *getRandomEmitter(float s) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR AreaLight *getRandomEmitter(float s) const noexcept {
         assert(numEmitters > 0);
 
         float sample = s;
@@ -281,7 +270,7 @@ public:
 
         //TODO maybe weight by radiance?
 
-        const size_t idx = CustomRenderer::min(static_cast<int>(floor(numEmitters * sample)), numEmitters - 1);
+        const size_t idx = std::min(static_cast<int>(floor(numEmitters * sample)), numEmitters - 1);
 
         assert(emitterBlasArr[idx]->isEmitter());
         return emitterBlasArr[idx]->getEmitter();

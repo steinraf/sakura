@@ -56,7 +56,7 @@ __global__ void denoise(Vector3f *input, Vector3f *output, FeatureBuffer feature
 
 
     //        auto gaussian = [alpha, constant] __device__ (float x){
-    //            return CustomRenderer::max(0.0f, std::exp(alpha * x * x) - constant);
+    //            return max(0.0f, std::exp(alpha * x * x) - constant);
     //        };
 
     //        float integral = 0.f;
@@ -94,9 +94,7 @@ __global__ void denoise(Vector3f *input, Vector3f *output, FeatureBuffer feature
 }
 
 
-__device__
-
-__device__ void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBuffer &featureBuffer, float *weights, int i, int j, int width, int height){
+GPU_ONLY void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBuffer &featureBuffer, float *weights, int i, int j, int width, int height){
 
 
     //        constexpr int neighbourDiameter = 21;
@@ -110,27 +108,27 @@ __device__ void bilateralFilterSlides(Vector3f *input, Vector3f *output, Feature
     const int pixelI = i, pixelJ = j;
 
 
-    for(int pixelQI = CustomRenderer::max(0, pixelI - neighbourDiameter /2); pixelQI < CustomRenderer::min(width, pixelI + neighbourDiameter /2 + 1); ++pixelQI){
-        for(int pixelQJ = CustomRenderer::max(0, pixelJ - neighbourDiameter /2); pixelQJ < CustomRenderer::min(height, pixelJ + neighbourDiameter /2 + 1); ++pixelQJ) {
+    for(int pixelQI = max(0, pixelI - neighbourDiameter /2); pixelQI < min(width, pixelI + neighbourDiameter /2 + 1); ++pixelQI){
+        for(int pixelQJ = max(0, pixelJ - neighbourDiameter /2); pixelQJ < min(height, pixelJ + neighbourDiameter /2 + 1); ++pixelQJ) {
             float meanDist = 0.f;
-            for(int pI = CustomRenderer::max(0, pixelI - patchDiameter / 2); pI < CustomRenderer::min(width, pixelI + patchDiameter / 2 + 1); ++pI) {
-                for(int pJ = CustomRenderer::max(0, pixelJ - patchDiameter / 2); pJ < CustomRenderer::min(height, pixelJ + patchDiameter / 2 + 1); ++pJ) {
+            for(int pI = max(0, pixelI - patchDiameter / 2); pI < min(width, pixelI + patchDiameter / 2 + 1); ++pI) {
+                for(int pJ = max(0, pixelJ - patchDiameter / 2); pJ < min(height, pixelJ + patchDiameter / 2 + 1); ++pJ) {
                     const int pIndex = pJ * width + pI;
                     const Vector3f pVarianceMean = featureBuffer.variances[pIndex]/static_cast<float>(featureBuffer.numSubSamples[pIndex]);
 
-                    for(int qI = CustomRenderer::max(0, pixelQI - patchDiameter / 2); qI < CustomRenderer::min(width, pixelQI + patchDiameter / 2 + 1); ++qI) {
-                        for(int qJ = CustomRenderer::max(0, pixelQJ - patchDiameter / 2); qJ < CustomRenderer::min(height, pixelQJ + patchDiameter / 2 + 1); ++qJ) {
+                    for(int qI = max(0, pixelQI - patchDiameter / 2); qI < min(width, pixelQI + patchDiameter / 2 + 1); ++qI) {
+                        for(int qJ = max(0, pixelQJ - patchDiameter / 2); qJ < min(height, pixelQJ + patchDiameter / 2 + 1); ++qJ) {
                             const int qIndex = qJ * width + qI;
                             const Vector3f qVarianceMean = featureBuffer.variances[qIndex]/static_cast<float>(featureBuffer.numSubSamples[qIndex]);
 
                             for(int col = 0; col < 3; ++col) {
-                                meanDist += (powf(input[pIndex][col] - input[qIndex][col], 2) - (pVarianceMean[col] + CustomRenderer::min(qVarianceMean[col], pVarianceMean[col]))) / (EPSILON + k * k * (pVarianceMean[col] + qVarianceMean[col]));
+                                meanDist += (powf(input[pIndex][col] - input[qIndex][col], 2) - (pVarianceMean[col] + min(qVarianceMean[col], pVarianceMean[col]))) / (EPSILON + k * k * (pVarianceMean[col] + qVarianceMean[col]));
                             }
 
 //                            Vector3f minVec{
-//                                    CustomRenderer::min(qVarianceMean[0], pVarianceMean[0]),
-//                                    CustomRenderer::min(qVarianceMean[1], pVarianceMean[1]),
-//                                    CustomRenderer::min(qVarianceMean[2], pVarianceMean[2]),
+//                                    min(qVarianceMean[0], pVarianceMean[0]),
+//                                    min(qVarianceMean[1], pVarianceMean[1]),
+//                                    min(qVarianceMean[2], pVarianceMean[2]),
 //                            };
 //                            meanDist += ((input[pIndex] - input[qIndex])*(input[pIndex] - input[qIndex]) - (pVarianceMean + minVec) / (Vector3f{EPSILON} + k * k * (pVarianceMean + qVarianceMean))).norm();
 
@@ -143,18 +141,17 @@ __device__ void bilateralFilterSlides(Vector3f *input, Vector3f *output, Feature
             }
 
 //            printf("Mean distance is %f\n", meanDist/(3 * patchDiameter * patchDiameter));
-            float w = expf(-CustomRenderer::max(0.f, meanDist/(3 * patchDiameter * patchDiameter)));
+            float w = expf(-max(0.f, meanDist/(3 * patchDiameter * patchDiameter)));
 
-            for(int pI = CustomRenderer::max(0, pixelI - patchDiameter / 2); pI < CustomRenderer::min(width, pixelI + patchDiameter / 2 + 1); ++pI) {
-                for(int pJ = CustomRenderer::max(0, pixelJ - patchDiameter / 2); pJ < CustomRenderer::min(height, pixelJ + patchDiameter / 2 + 1); ++pJ) {
+            for(int pI = max(0, pixelI - patchDiameter / 2); pI < min(width, pixelI + patchDiameter / 2 + 1); ++pI) {
+                for(int pJ = max(0, pixelJ - patchDiameter / 2); pJ < min(height, pixelJ + patchDiameter / 2 + 1); ++pJ) {
 
                     const int pIndex = pJ * width + pI;
 
-                    for(int qI = CustomRenderer::max(0, pixelQI - patchDiameter / 2); qI < CustomRenderer::min(width, pixelQI + patchDiameter / 2 + 1); ++qI) {
-                        for(int qJ = CustomRenderer::max(0, pixelQJ - patchDiameter / 2); qJ < CustomRenderer::min(height, pixelQJ + patchDiameter / 2 + 1); ++qJ) {
+                    for(int qI = max(0, pixelQI - patchDiameter / 2); qI < min(width, pixelQI + patchDiameter / 2 + 1); ++qI) {
+                        for(int qJ = max(0, pixelQJ - patchDiameter / 2); qJ < min(height, pixelQJ + patchDiameter / 2 + 1); ++qJ) {
 
                             const int qIndex = qJ * width + qI;
-
                             atomicAdd(weights + pIndex, w);
                             auto add = []__device__(Vector3f *address, const Vector3f &vec){
                                 Vector3f &v = *address;
@@ -164,6 +161,7 @@ __device__ void bilateralFilterSlides(Vector3f *input, Vector3f *output, Feature
                             };
                             add(output + pIndex, w * input[qIndex]);
 //                            Vector3f::atomicCudaAdd(output + pIndex, w * input[qIndex]);
+
                         }
                     }
                 }

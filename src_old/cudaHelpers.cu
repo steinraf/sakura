@@ -28,14 +28,7 @@ namespace cudaHelpers {
     }
 
 
-    __host__ void
-    check_cuda(cudaError_t result, char const *const func, const char *const file, int line) noexcept(false) {
-        if(result) {
-            std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << ":" << cudaGetErrorString(result) << "\nAt " << file << ":" << line << " '" << func << "' \n";
-            cudaDeviceReset();
-            exit(99);
-        }
-    }
+
 
 
     __global__ void initRng(int width, int height, curandState *randState) {
@@ -181,7 +174,7 @@ namespace cudaHelpers {
 
 
         auto gaussian = [alpha, constant] __device__ (float xSq){
-            return CustomRenderer::max(0.0f, std::exp(alpha * xSq) - constant);
+            return max(0.0f, std::exp(alpha * xSq) - constant);
         };
 
         float integral = 0.f;
