@@ -94,4 +94,4 @@ private:
 __host__ BLAS *getMeshFromFile(const std::string &filename, thrust::device_vector<Triangle> &deviceTrias,
                               thrust::device_vector<float> &areaCDF, float &totalArea,
                               const Matrix4f &transform,
-                              BSDF bsdf, Texture normalMap, AreaLight *deviceEmitter = nullptr, GalaxyMedium *medium = nullptr) noexcept(false);
+                              BSDF bsdf, Texture normalMap, AreaLight *deviceEmitter = nullptr) noexcept(false);

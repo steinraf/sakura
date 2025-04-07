@@ -156,7 +156,14 @@ __device__ void bilateralFilterSlides(Vector3f *input, Vector3f *output, Feature
                             const int qIndex = qJ * width + qI;
 
                             atomicAdd(weights + pIndex, w);
-                            Vector3f::atomicCudaAdd(output + pIndex, w * input[qIndex]);
+                            auto add = []__device__(Vector3f *address, const Vector3f &vec){
+                                Vector3f &v = *address;
+                                atomicAdd(&(v[0]), vec[0]);
+                                atomicAdd(&(v[1]), vec[1]);
+                                atomicAdd(&(v[2]), vec[2]);
+                            };
+                            add(output + pIndex, w * input[qIndex]);
+//                            Vector3f::atomicCudaAdd(output + pIndex, w * input[qIndex]);
                         }
                     }
                 }

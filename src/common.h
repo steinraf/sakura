@@ -6,8 +6,11 @@
 
 #include "../src_old/utility/vector.cuh"
 
-class Camera;
+struct EmitterQueryRecord;
+class Ray3f;
 class Scene;
+struct ShapeQueryRecord;
+
 
 
 
@@ -16,6 +19,7 @@ using Vec2f = Vector2f;
 using Vec3f = Vector3f;
 
 #define CPU_GPU __host__ __device__
+#define CPU_GPU_CONSTEXPR __host__ __device__ inline constexpr
 #define CPU_ONLY __host__
 #define GPU_ONLY __device__
 

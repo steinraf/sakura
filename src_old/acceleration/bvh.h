@@ -6,12 +6,14 @@
 
 #include "aabb.h"
 
+#include "../../src/common.h"
+
+#include "../../src/emitters/areaLight.cuh"
+#include "../../src/emitters/environmentEmitter.cuh"
 #include "../bsdf.h"
-#include "../emitters/areaLight.h"
-#include "../emitters/environmentEmitter.h"
 #include "../hittable.h"
-#include "../medium/medium.h"
 #include "../utility/ray.h"
+#include "../shapes/triangle.h"
 
 struct AccelerationNode {
     __device__ __host__ constexpr AccelerationNode() noexcept
@@ -59,7 +61,6 @@ public:
 
     Triangle *firstTriangle;
 
-    GalaxyMedium *medium = nullptr;
 
 
 public:
@@ -68,9 +69,8 @@ public:
     float totalArea;
 
     __device__ constexpr explicit BLAS(AccelerationNode *bvhTotalNodes, float totalArea, const float *cdf,
-                                       const size_t _numPrimitives, AreaLight *emitter, BSDF bsdf, Texture normalMap, GalaxyMedium *medium) noexcept
-        : root(bvhTotalNodes), cdf(cdf), numPrimitives(_numPrimitives), emitter(emitter), bsdf(bsdf), firstTriangle(bvhTotalNodes[numPrimitives - 1].triangle),
-          medium(medium), normalMap(normalMap), totalArea(totalArea){
+                                       const size_t _numPrimitives, AreaLight *emitter, BSDF bsdf, Texture normalMap) noexcept
+        : root(bvhTotalNodes), cdf(cdf), numPrimitives(_numPrimitives), emitter(emitter), bsdf(bsdf), firstTriangle(bvhTotalNodes[numPrimitives - 1].triangle), normalMap(normalMap), totalArea(totalArea){
 
         //IF THINGS GET CHANGED HERE, REMEMBER TO CHANGE IN COPY CONSTRUCTOR AS WELL
         numPrimitives = _numPrimitives;
@@ -97,8 +97,6 @@ public:
 
         normalMap = blas.normalMap;
 
-        medium = blas.medium;
-
         if(emitter) {
             emitter->setBlas(this);
         }
@@ -106,11 +104,6 @@ public:
         return *this;
     }
 
-    [[nodiscard]] __device__ GalaxyMedium *getMedium() const noexcept{
-        if(medium && !medium->isActive)
-            return nullptr;
-        return medium;
-    }
 
     [[nodiscard]] __device__ constexpr Triangle *sample(float sampleValue) const noexcept {
 

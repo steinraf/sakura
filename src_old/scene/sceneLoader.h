@@ -10,8 +10,8 @@
 #include <map>
 #include <string>
 
+#include "../../src/camera/camera.cuh"
 #include "../bsdf.h"
-#include "../medium/medium.h"
 #include "../utility/vector.cuh"
 #include "pugixml.hpp"
 
@@ -288,8 +288,6 @@ struct SceneRepresentation {
                 addBSDF(child);
             } else if(childName == "transform") {
                 createTransform(child);
-            } else if(childName == "medium") {
-                createMedium(child);
             }else {
                 throw std::runtime_error("Invalid Tag \"" + childName + "\" found for shape.");
             }
@@ -378,55 +376,6 @@ struct SceneRepresentation {
         return attrib.value();
     }
 
-    void inline createMedium(const pugi::xml_node &medium) {
-        const std::string phaseFunction = medium.attribute("phasefunction").value();
-
-        meshInfos.back().medium.isActive = true;
-
-        for(auto &child: medium.children()) {
-            const std::string &mediumChildName = child.name();
-
-            const std::string &attribName = child.attribute("name").value();
-
-            if(mediumChildName == "float"){
-                if(attribName == "sigma_a"){
-                    meshInfos.back().medium.m_sigmaA = std::stof(child.attribute("value").value());
-                } else if(attribName == "sigma_s"){
-                    meshInfos.back().medium.m_sigmaS = std::stof(child.attribute("value").value());
-                } else if(attribName == "radius"){
-                    meshInfos.back().medium.m_radius = std::stof(child.attribute("value").value());
-                }else if(attribName == "arm_exponent"){
-                    meshInfos.back().medium.m_armThinning = std::stof(child.attribute("value").value());
-                }else if(attribName == "arm_depth"){
-                    meshInfos.back().medium.m_armDepth = std::stof(child.attribute("value").value());
-                }else if(attribName == "arm_length"){
-                    meshInfos.back().medium.m_armLength = std::stof(child.attribute("value").value());
-                } else if(attribName == "twist"){
-                    meshInfos.back().medium.m_twist = std::stof(child.attribute("value").value());
-                } else {
-                    throw std::runtime_error("Attribute " + std::string(child.attribute("name").value()) + " unknown for medium.");
-                }
-            } else if(mediumChildName == "integer"){
-                if(attribName == "arm_count"){
-                    meshInfos.back().medium.m_armCount = std::stoi(child.attribute("value").value());
-                } else if(attribName == "is_homogeneous"){
-                    meshInfos.back().medium.isHomogeneous = static_cast<bool>(std::stof(child.attribute("value").value()));
-                } else {
-                    throw std::runtime_error("Integer attribute " + attribName + " is not allowed in media.");
-                }
-            } else if(mediumChildName == "vector"){
-                meshInfos.back().medium.m_normal = getVector3f(child, "value", "\t\t\t", "normal");
-            } else if(mediumChildName == "point"){
-                meshInfos.back().medium.m_center = getVector3f(child, "value", "\t\t\t", "center");
-            } else if(mediumChildName == "phasefunction"){
-                if(std::string(child.attribute("type").value()) != "isotropic")
-                    throw std::runtime_error("Phasefunction must be isotropic.");
-            } else {
-                throw std::runtime_error("Medium attribute " + mediumChildName + " is not valid.");
-            }
-
-        }
-    }
 
     void inline createTransform(const pugi::xml_node &transform, bool isEmitter = false) noexcept(false) {
 
@@ -464,12 +413,13 @@ struct SceneRepresentation {
 
     struct CameraInfo {
         CameraInfo()
-            : target(0.f, 0.f, -1.f), origin(0.f), up(0.f, 1.f, 0.f), fov(30), aperture(0.f), focusDist(1.f), k1(0.f), k2(0.f) {
+            : target(0.f, 0.f, -1.f), origin(0.f), up(0.f, 1.f, 0.f), fov(30), aperture(0.f), focusDist(1.f), k1(0.f), k2(0.f), apertureType(ApertureType::Circular) {
         }
 
         Vector3f target, origin, up;
         float fov, aperture, focusDist;
         float k1, k2;
+        ApertureType apertureType;
     };
 
     CameraInfo cameraInfo;
@@ -484,7 +434,6 @@ struct SceneRepresentation {
         BSDF bsdf;
 //        Texture normalMap = Texture{"scenes/normalMaps/rock.jpg"};
         Texture normalMap = Texture{Vector3f{0.5f, 0.5f, 1.f}};
-        GalaxyMedium medium{};
     };
 
     std::vector<MeshInfo> meshInfos{};

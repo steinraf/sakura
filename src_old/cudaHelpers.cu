@@ -46,11 +46,11 @@ namespace cudaHelpers {
     }
 
     __global__ void initBVH(BLAS *bvh, AccelerationNode *bvhTotalNodes, float totalArea, const float *cdf,
-                            size_t numPrimitives, AreaLight *emitter, BSDF bsdf, Texture normalMap, GalaxyMedium *medium) {
+                            size_t numPrimitives, AreaLight *emitter, BSDF bsdf, Texture normalMap) {
         int i, j, pixelIndex;
         if(!cudaHelpers::initIndices(i, j, pixelIndex, 1, 1)) return;
 
-        *bvh = BLAS{bvhTotalNodes, totalArea, cdf, numPrimitives, emitter, bsdf, normalMap, medium};
+        *bvh = BLAS{bvhTotalNodes, totalArea, cdf, numPrimitives, emitter, bsdf, normalMap};
     }
 
 

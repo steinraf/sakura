@@ -117,7 +117,7 @@ add_executable(CustomRenderer
         src_old/scene/scene.cu
         src_old/utility/ray.h
         src_old/hittable.h
-        src_old/camera/camera.cu
+
         src_old/utility/warp.h
         src_old/utility/sampler.h
         src_old/acceleration/bvh.h
@@ -126,20 +126,20 @@ add_executable(CustomRenderer
         src_old/bsdf.h
         src_old/acceleration/aabb.h
         src_old/scene/sceneLoader.h
-        src_old/emitters/areaLight.cu
+
         src_old/utility/frame.h
         src_old/textures/imageTexture.cu
-        src_old/emitters/environmentEmitter.h
         src_old/shapes/triangle.cu
-        src_old/medium/medium.cu
-        src_old/medium/isotropicPhaseFunction.cu
         src_old/denoise/denoise.cu
+        src_old/utility/vector.cuh
 
+        src/camera/camera.cuh
+        src/common.h
         src/gui/gui.cpp
-        src_old/utility/vector.cu
         src/gui/viewport.cu
         src/statistics/statistics.h
-        src/common.h
+        src/emitters/environmentEmitter.cuh
+        src/emitters/areaLight.cu
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:

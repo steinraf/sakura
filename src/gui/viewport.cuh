@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "../../src_old/camera/camera.h"
+#include "../camera/camera.cuh"
 #include "../common.h"
 #include <GL/glew.h>
 #include <string>

@@ -134,7 +134,15 @@ public:
         return {0.f, 0.f, 0.f};
     }
 
-    __device__ static inline void atomicCudaAdd(Vector3f *address, const Vector3f &vec) noexcept;
+
+//    __device__ static inline void atomicCudaAdd(Vector3f *address, const Vector3f &vec) noexcept {
+//        Vector3f &v = *address;
+//        atomicAdd(&(v[0]), vec[0]);
+//        atomicAdd(&(v[1]), vec[1]);
+//        atomicAdd(&(v[2]), vec[2]);
+//    }
+
+
 
 
     friend inline std::ostream &operator<<(std::ostream &os, const Vector3f &t);

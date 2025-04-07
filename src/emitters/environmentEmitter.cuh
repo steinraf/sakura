@@ -1,13 +1,16 @@
 //
 // Created by steinraf on 07/12/22.
 //
-
-#include "../shapes/triangle.h"
-#include "../utility/ray.h"
-#include "../utility/vector.cuh"
-#include "areaLight.h"
-
 #pragma once
+
+
+#include "../common.h"
+
+#include "../../src_old/textures/imageTexture.h"
+
+#include "../../src_old/utility/ray.h"
+#include "../../src_old/utility/warp.h"
+#include "areaLight.cuh"
 
 #define ENVIRONMENT_EPSILON 1e-6f
 
@@ -15,12 +18,12 @@ class EnvironmentEmitter {
 public:
     Texture texture;
 
-    explicit __host__ __device__ constexpr EnvironmentEmitter(Texture texture) noexcept
+    explicit CPU_GPU constexpr EnvironmentEmitter(Texture texture) noexcept
         : texture(texture) {
 
     }
     
-    [[nodiscard]] __device__ constexpr Color3f eval(const Ray3f &ray) const noexcept {
+    [[nodiscard]] CPU_GPU constexpr Color3f eval(const Ray3f &ray) const noexcept{
 
         assert(ray.getDirection().norm() != 0.f);
         const Vector3f dir = ray.getDirection().normalized();
@@ -38,18 +41,18 @@ public:
         return texture.eval(Vector2f{(u < 0) ? (u + 1) : u, v});
     }
 
-    [[nodiscard]] __device__ float constexpr pdf(const EmitterQueryRecord &emitterQueryRecord) const noexcept{ //TODO find where sin factor needs to be
+    [[nodiscard]] CPU_GPU constexpr float pdf(const EmitterQueryRecord &emitterQueryRecord) const noexcept{ //TODO find where sin factor needs to be
         const float pdf = texture.pdf(emitterQueryRecord.idx);
         if(pdf == 0 || sin(M_PIf*emitterQueryRecord.uv[1]) == 0) return ENVIRONMENT_EPSILON ;
         return texture.pdf(emitterQueryRecord.idx)  *M_1_PIf*M_1_PIf/(2*sin(M_PIf*emitterQueryRecord.uv[1]));
     }
 
-    [[nodiscard]] __device__ Color3f constexpr sample(EmitterQueryRecord &emitterQueryRecord, const Vector3f &sample) const noexcept{
+    [[nodiscard]] CPU_GPU constexpr Color3f sample(EmitterQueryRecord &emitterQueryRecord, const Vector3f &sample) const noexcept{
         //TODO check if this actually needs 3d sample input or if 1d is sufficient
         if(!texture.deviceCDF)
             return texture.eval(Vector2f{});
 
-//        const Vector3f dirSample = Warp::squareToUniformSphere(Vector2f{sample[0], sample[1]});
+        //        const Vector3f dirSample = Warp::squareToUniformSphere(Vector2f{sample[0], sample[1]});
 
 
         const size_t idx = Warp::sampleCDF(sample[2], texture.deviceCDF, texture.deviceCDF + (texture.width * texture.height - 1));
@@ -85,3 +88,4 @@ public:
     }
 
 };
+

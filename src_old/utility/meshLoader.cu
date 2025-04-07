@@ -259,7 +259,7 @@ DeviceMeshInfo meshToGPU(const HostMeshInfo &mesh) noexcept {
 __host__ BLAS *getMeshFromFile(const std::string &filename, thrust::device_vector<Triangle> &deviceTrias,
                                thrust::device_vector<float> &areaCDF, float &totalArea,
                                const Matrix4f &transform,
-                               BSDF bsdf, Texture normalMap, AreaLight *deviceEmitter, GalaxyMedium *medium) noexcept(false) {
+                               BSDF bsdf, Texture normalMap, AreaLight *deviceEmitter) noexcept(false) {
     clock_t startGeometryBVH = clock();
 
 
@@ -310,7 +310,7 @@ __host__ BLAS *getMeshFromFile(const std::string &filename, thrust::device_vecto
 
     clock_t initBVHTime = clock();
 
-    cudaHelpers::initBVH<<<1, 1>>>(bvh, bvhTotalNodes, totalArea, deviceCDF.data().get(), numTriangles, deviceEmitter, bsdf, normalMap, medium);
+    cudaHelpers::initBVH<<<1, 1>>>(bvh, bvhTotalNodes, totalArea, deviceCDF.data().get(), numTriangles, deviceEmitter, bsdf, normalMap);
 
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());

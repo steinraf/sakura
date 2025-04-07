@@ -20,15 +20,15 @@ struct ShapeQueryRecord {
 
     float pdf; //TODO investigate why pdf is not used
 
-    __device__ constexpr ShapeQueryRecord() noexcept
+    CPU_GPU_CONSTEXPR ShapeQueryRecord() noexcept
         : ref(), p(), n(), uv(), pdf(0.f) {
     }
 
-    __device__ constexpr ShapeQueryRecord(const Vector3f &ref_) noexcept
+    CPU_GPU_CONSTEXPR ShapeQueryRecord(const Vector3f &ref_) noexcept
         : ref(ref_), p(), n(), uv(), pdf(0.f) {
     }
 
-    __device__ constexpr ShapeQueryRecord(const Vector3f &ref_, const Vector3f &p_) noexcept
+    CPU_GPU_CONSTEXPR ShapeQueryRecord(const Vector3f &ref_, const Vector3f &p_) noexcept
         : ref(ref_), p(p_), n(), uv(), pdf(0.f) {
     }
 };
@@ -38,7 +38,7 @@ class Triangle {
 public:
     constexpr Triangle() noexcept = default;
 
-    __device__ __host__ constexpr Triangle(
+    CPU_GPU_CONSTEXPR Triangle(
             const Vector3f &p0, const Vector3f &p1, const Vector3f &p2,
             const Vector2f &uv0, const Vector2f &uv1, const Vector2f &uv2,
             const Vector3f &n0, const Vector3f &n1, const Vector3f &n2) noexcept
@@ -48,7 +48,7 @@ public:
     }
 
     //Nori Triangle Ray3f intersect
-    __device__ constexpr bool rayIntersect(const Ray3f &r, Intersection &its) const noexcept {
+    CPU_GPU_CONSTEXPR bool rayIntersect(const Ray3f &r, Intersection &its) const noexcept {
 
         /* Find vectors for two edges sharing v[0] */
         const Vector3f edge1 = p1 - p0, edge2 = p2 - p0;
@@ -98,23 +98,23 @@ public:
 
     __device__ void setHitInformation(const Ray3f &ray, Intersection &its) const noexcept;
 
-    [[nodiscard]] __host__ __device__ constexpr inline float getArea() const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR float getArea() const noexcept {
         return 0.5f * (p1 - p0).cross(p2 - p0).norm();
     }
 
-    [[nodiscard]] __device__ constexpr inline Vector3f getCoordinate(const Vector3f &bary) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR Vector3f getCoordinate(const Vector3f &bary) const noexcept {
         return bary[0] * p0 + bary[1] * p1 + bary[2] * p2;
     }
 
-    [[nodiscard]] __device__ constexpr inline Vector2f getUV(const Vector3f &bary) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR Vector2f getUV(const Vector3f &bary) const noexcept {
         return  bary[0] * uv0+ bary[1] * uv1+ bary[2] * uv2;;
     }
 
-    [[nodiscard]] __device__ constexpr inline Vector3f getNormal(const Vector3f &bary) const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR Vector3f getNormal(const Vector3f &bary) const noexcept {
         return bary[0] * n0 + bary[1] * n1 + bary[2] * n2;
     }
 
-    [[nodiscard]] __device__ constexpr inline AABB getAABB() const noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR AABB getAABB() const noexcept {
         return AABB{p0, p1, p2};
     }
 

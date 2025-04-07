@@ -34,7 +34,8 @@ __host__ Scene::Scene(SceneRepresentation &&sceneRepr, Device dev) : sceneRepres
                                                                                   sceneRepr.cameraInfo.aperture,
                                                                                   sceneRepr.cameraInfo.focusDist,
                                                                                   sceneRepr.cameraInfo.k1,
-                                                                                  sceneRepr.cameraInfo.k2) {
+                                                                                  sceneRepr.cameraInfo.k2,
+                                                                                  sceneRepr.cameraInfo.apertureType) {
 
     assert(dev == CPU);
 
@@ -84,16 +85,6 @@ __host__ Scene::Scene(SceneRepresentation &&sceneRepr, Device dev) : sceneRepres
     std::vector<BLAS *> hostMeshBlasVector(numMeshes);
 
 
-    std::vector<GalaxyMedium> hostMedia(numMeshes);
-    for(size_t i = 0; i < numMeshes; ++i) {
-        hostMedia[i] = GalaxyMedium(sceneRepr.meshInfos[i].medium);
-    }
-
-    GalaxyMedium *deviceMedia;
-    checkCudaErrors(cudaMalloc(&deviceMedia, sizeof(GalaxyMedium) * numMeshes));
-    checkCudaErrors(cudaMemcpy(deviceMedia, hostMedia.data(), sizeof(GalaxyMedium) * numMeshes,
-                               cudaMemcpyHostToDevice));
-
 
     clock_t meshLoadStart = clock();
 #pragma omp parallel for
@@ -105,8 +96,7 @@ __host__ Scene::Scene(SceneRepresentation &&sceneRepr, Device dev) : sceneRepres
                                                 sceneRepr.meshInfos[i].transform,
                                                 sceneRepr.meshInfos[i].bsdf,
                                                 sceneRepr.meshInfos[i].normalMap,
-                                                nullptr,
-                                                deviceMedia + i);
+                                                nullptr);
     }
 
     auto numEmitters = sceneRepresentation.emitterInfos.size();
@@ -138,8 +128,7 @@ __host__ Scene::Scene(SceneRepresentation &&sceneRepr, Device dev) : sceneRepres
                                                    sceneRepr.emitterInfos[i].transform,
                                                    sceneRepr.emitterInfos[i].bsdf,
                                                    sceneRepr.emitterInfos[i].normalMap,
-                                                   deviceAreaLights + i,
-                                                   nullptr);
+                                                   deviceAreaLights + i);
     }
 
 
@@ -397,6 +386,6 @@ __host__ void Scene::saveOutput() {
 }
 
 __host__ void Scene::step(float dt) noexcept {
-    deviceCamera.addVelocity(cameraVelocity, dt);
+    deviceCamera.addVelocityRelative(cameraVelocity, dt);
     std::cout << std::flush;
 }
