@@ -127,10 +127,6 @@ __host__ Scene::Scene(SceneRepresentation &&sceneRepr, Device dev) : sceneRepres
     checkCudaErrors(cudaGetLastError());
 
 
-    imageBuffer = OpenGLSharedBuffer{static_cast<size_t>(sceneRepr.sceneInfo.width), static_cast<size_t>(sceneRepr.sceneInfo.height)};
-    imageBufferDenoised = OpenGLSharedBuffer{static_cast<size_t>(sceneRepr.sceneInfo.width), static_cast<size_t>(sceneRepr.sceneInfo.height)};
-
-
 }
 
 __host__ Scene::~Scene() {
@@ -377,4 +373,15 @@ __host__ OpenGLSharedBuffer::OpenGLSharedBuffer(size_t width, size_t height) : w
     checkCudaErrors(cudaCreateSurfaceObject(&surface, &resDesc));
 
 
+}
+__host__ OpenGLSharedBuffer::~OpenGLSharedBuffer() {
+
+    checkCudaErrors(cudaDestroySurfaceObject(surface));
+    checkCudaErrors(cudaGraphicsUnmapResources(1, &resource, nullptr));
+
+    checkCudaErrors(cudaGraphicsUnregisterResource(resource));
+    glDeleteTextures(1, &texture);
+
+    featureBuffer->~FeatureBuffer();
+    checkCudaErrors(cudaFree(featureBuffer));
 }

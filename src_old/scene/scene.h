@@ -45,6 +45,7 @@ struct OpenGLSharedBuffer{
     size_t width, height;
 
     CPU_ONLY explicit OpenGLSharedBuffer(size_t width, size_t height);
+    CPU_ONLY ~OpenGLSharedBuffer();
 };
 
 class Scene {
