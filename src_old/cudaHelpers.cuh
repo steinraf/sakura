@@ -373,7 +373,7 @@ namespace cudaHelpers {
                 if(!scene->rayIntersect(envMapEQR.shadowRay)) {
 
                     BSDFQueryRecord bsdfQueryRecord{
-                            its.shFrame.toLocal(-currentRay.d),
+                            its.shFrame.toLocal(-currentRay.getDirection()),
                             its.shFrame.toLocal(envMapEQR.wi),
                             ESolidAngle};
                     bsdfQueryRecord.measure = ESolidAngle;
@@ -406,7 +406,7 @@ namespace cudaHelpers {
             if(!scene->rayIntersect(emitterQueryRecord.shadowRay)) {
 
                 BSDFQueryRecord bsdfQueryRecord{
-                        its.shFrame.toLocal(-currentRay.d),
+                        its.shFrame.toLocal(-currentRay.getDirection()),
                         its.shFrame.toLocal(emitterQueryRecord.wi),
                         ESolidAngle};
                 bsdfQueryRecord.measure = ESolidAngle;
@@ -421,7 +421,7 @@ namespace cudaHelpers {
             }
 
             if(its.mesh->isEmitter())
-                Li += t * wMat * its.mesh->getEmitter()->eval({currentRay.o, its.p, its.shFrame.n, its.uv});
+                Li += t * wMat * its.mesh->getEmitter()->eval({currentRay.getOrigin(), its.p, its.shFrame.n, its.uv});
 
             float successProbability = fmin(t.maxCoeff(), 0.99f);
             //                if((++numBounces > 3) && sampler->next1D() > successProbability)
@@ -435,7 +435,7 @@ namespace cudaHelpers {
             t /= successProbability;
 
             BSDFQueryRecord bsdfQueryRecord{
-                    its.shFrame.toLocal(-currentRay.d)};
+                    its.shFrame.toLocal(-currentRay.getDirection())};
             bsdfQueryRecord.measure = ESolidAngle;
             bsdfQueryRecord.uv = its.uv;
 
@@ -458,14 +458,14 @@ namespace cudaHelpers {
             }
 
             if(masEmitterIntersect.mesh->isEmitter()) {
-                const float emsPDF = masEmitterIntersect.mesh->getEmitter()->pdf({currentRay.o,
+                const float emsPDF = masEmitterIntersect.mesh->getEmitter()->pdf({currentRay.getOrigin(),
                                                                                   masEmitterIntersect.p,
                                                                                   masEmitterIntersect.shFrame.n,
                                                                                   masEmitterIntersect.uv});
                 wMat = masPDF + emsPDF > 0.f ? masPDF / (masPDF + emsPDF) : masPDF;
             }else {
                 const float emsPDF = scene->environmentEmitter.pdf({
-                        currentRay.o,
+                        currentRay.getOrigin(),
                         masEmitterIntersect.p,
                         masEmitterIntersect.shFrame.n,
                         masEmitterIntersect.uv

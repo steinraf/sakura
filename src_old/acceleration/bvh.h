@@ -137,7 +137,7 @@ public:
                     if(isShadowRay)
                         return true;
                     hasHit = true;
-                    r.maxDist = its.t;
+                    r.setMaxDist(its.t);
                     hitTriangle = currentNode->triangle;
                     its.mesh = this;
                 }
@@ -229,8 +229,8 @@ public:
 
 
         //Adaptive ray epsilon idea from nori
-        if (r.minDist == EPSILON)
-            r.minDist = std::max(r.minDist, r.minDist * r.getOrigin().absValues().maxCoeff());
+        if (r.getMinDist() == EPSILON)
+            r.setMinDist(std::max(r.getMinDist(), r.getMinDist() * r.getOrigin().absValues().maxCoeff()));
 
         Intersection record;
         bool hasHit = false;
@@ -240,7 +240,7 @@ public:
                 if(isShadowRay)
                     return true;
                 hasHit = true;
-                r.maxDist = record.t;
+                r.setMaxDist(record.t);
             }
         }
 
@@ -249,7 +249,7 @@ public:
                 if(isShadowRay)
                     return true;
                 hasHit = true;
-                r.maxDist = record.t;
+                r.setMaxDist(record.t);
             }
         }
 

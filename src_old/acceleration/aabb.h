@@ -64,7 +64,7 @@ struct AABB {
             }
         }
 
-        return ray.minDist <= farT && nearT <= ray.maxDist;
+        return ray.getMinDist() <= farT && nearT <= ray.getMaxDist();
     }
 
 

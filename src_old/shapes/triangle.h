@@ -86,7 +86,7 @@ public:
 
         const float t = edge2.dot(qvec) * inv_det;
 
-        if(t >= r.minDist && t <= r.maxDist){
+        if(t >= r.getMinDist() && t <= r.getMaxDist()){
             its.uv = {u, v};
             its.t = t;
 
