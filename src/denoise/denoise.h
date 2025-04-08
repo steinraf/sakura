@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "../cudaHelpers.cuh"
-#include "../utility/vector.cuh"
+#include "../../src_old/cudaHelpers.cuh"
+#include "../../src_old/utility/vector.cuh"
 
 
 __global__ void denoise(Vector3f *input, Vector3f *output, FeatureBuffer featureBuffer, float *weights, int width, int height,

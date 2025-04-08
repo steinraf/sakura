@@ -19,11 +19,6 @@ void OpenGLViewport::render() {
 
         is_rendering_done = true;
     }
-    const auto availableSize = ImVec2{
-            ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x,
-            ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y,
-    };
-    ImGui::Image(scene.hostImageTexture, availableSize);
 }
 OpenGLViewport::OpenGLViewport(Scene &scene, unsigned int width, unsigned int height, std::string title)
     : scene(scene), width(width), height(height), title(std::move(title)) {

@@ -5,8 +5,7 @@
 #include "src_old/scene/scene.h"
 #include "src_old/scene/sceneLoader.h"
 
-#include "src/gui/gui.h"
-
+#include "src/gui/gui.cuh"
 
 
 int main(int argc, char **argv){

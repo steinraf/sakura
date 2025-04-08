@@ -3,16 +3,16 @@ Starting rendering...
 Started parsing scene
 	integrator
 		 path
-		MaxRayDepth: 
+		MaxRayDepth:
 			200
 	sensor
-		FOV: 
+		FOV:
 			27.7856
-		Transform: 
+		Transform:
 			target: {0, 0.893051, 4.41198}
 			origin: {0, 0.919769, 5.41159}
 			up: {0, 1, 0}
-		Sampler: 
+		Sampler:
 			SampleCount: 1024
 			Height: 600
 			Width: 800
@@ -33,21 +33,21 @@ Started parsing scene
 			reflectance: {0.630, 0.065, 0.05}
 	shape: sus
 		Filename: scenes/obj/sus.obj
-		Transform: 
+		Transform:
 			scale: {0.003263, 0.003263, 0.003263}
 			translation: {-0.421400, 0, 0}
 		Material:
 			BSDF: DIELECTRIC
 	shape: sus1
 		Filename: scenes/obj/sus.obj
-		Transform: 
+		Transform:
 			scale: {0.003263, 0.003263, 0.003263}
 			translation: {0, 0, -0.3}
 		Material:
 			BSDF: MIRROR
 	shape: sus2
 		Filename: scenes/obj/sus.obj
-		Transform: 
+		Transform:
 			scale: {0.003263, 0.003263, 0.003263}
 			translation: {0.445800, 0, 0}
 		Material:
@@ -58,75 +58,86 @@ Started parsing scene
 		Emitter:
 			Type: Area
 			radiance: {15, 15, 15}
-Reading mesh walls.obj ...
+Reading mesh sus.obj ...
 Reading mesh sus.obj ...
 Reading mesh leftwall.obj ...
 Reading mesh sus.obj ...
-Reading mesh sus.obj ...
+Reading mesh walls.obj ...
+Reading mesh rightwall.obj ...
+	Total area of all triangles is 3.227700
 	Total area of all triangles is 11.348550
 	Total area of all triangles is 3.228097
-	Loading Geometry took 0.029302 seconds.
-	Managing 2 triangles.
-	BLAS construction took 4.5e-05 seconds.
-Reading mesh rightwall.obj ...
-	Total bounding box is (-1.020100, -0.000100, -1.040100) -> (-0.989900, 1.590100, 0.990100)
-	BLAS boundingBox Compute took 0.099652 seconds.
-	BLAS init took 6.8e-05 seconds.
-	Loading Geometry and BLAS construction took 0.129095 seconds.
-	Loading Geometry took 0.129181 seconds.
+	Loading Geometry took 0.049596 seconds.
 	Managing 6 triangles.
-	BLAS construction took 4.4e-05 seconds.
+	BLAS construction took 6.7e-05 seconds.
 	Total bounding box is (-1.020300, -0.000300, -1.040300) -> (1.000300, 1.590300, 0.990300)
-	BLAS boundingBox Compute took 0.000107 seconds.
-	BLAS init took 7.7e-05 seconds.
-	Loading Geometry and BLAS construction took 0.12943 seconds.
-	Total area of all triangles is 3.227700
-	Loading Geometry took 0.066031 seconds.
+	BLAS boundingBox Compute took 0.014281 seconds.
+	BLAS init took 0.004563 seconds.
+	Loading Geometry and BLAS construction took 0.070408 seconds.
+	Loading Geometry took 0.081989 seconds.
 	Managing 2 triangles.
-	BLAS construction took 1e-05 seconds.
+	BLAS construction took 0.005595 seconds.
 	Total bounding box is (0.999900, -0.000100, -1.040100) -> (1.000100, 1.590100, 0.990100)
+	BLAS boundingBox Compute took 0.005824 seconds.
+	BLAS init took 0.005396 seconds.
+	Loading Geometry and BLAS construction took 0.100892 seconds.
+	Loading Geometry took 0.197206 seconds.
+	Managing 2 triangles.
+	BLAS construction took 0.005136 seconds.
+	Total bounding box is (-1.020100, -0.000100, -1.040100) -> (-0.989900, 1.590100, 0.990100)
 	BLAS boundingBox Compute took 4.4e-05 seconds.
 	BLAS init took 6e-06 seconds.
-	Loading Geometry and BLAS construction took 0.066106 seconds.
+	Loading Geometry and BLAS construction took 0.202409 seconds.
 	Total area of all triangles is 0.859170
 	Total area of all triangles is 0.859170
 	Total area of all triangles is 0.859170
-	Loading Geometry took 0.19159 seconds.
+	Loading Geometry took 0.22234 seconds.
 	Managing 13648 triangles.
-	BLAS construction took 0.000103 seconds.
-	Loading Geometry took 0.191791 seconds.
-	Managing 13648 triangles.
-	Loading Geometry took 0.191917 seconds.
-	Managing 13648 triangles.
-	Total bounding box is (-0.616840, -0.001297, -0.296678) -> (-0.225960, 0.645023, 0.215039)
-	BLAS boundingBox Compute took 0.04481 seconds.
-	BLAS construction took 0.04675 seconds.
-	BLAS construction took 0.046728 seconds.
-	BLAS init took 6.7e-05 seconds.
-	Loading Geometry and BLAS construction took 0.238639 seconds.
-	Total bounding box is (-0.195440, -0.001297, -0.596678) -> (0.195440, 0.645023, -0.084961)
-	BLAS boundingBox Compute took 0.03401 seconds.
-	BLAS init took 1.9e-05 seconds.
-	Loading Geometry and BLAS construction took 0.272631 seconds.
+	BLAS construction took 0.000185 seconds.
 	Total bounding box is (0.250360, -0.001297, -0.296678) -> (0.641240, 0.645023, 0.215039)
-	BLAS boundingBox Compute took 0.073428 seconds.
-	BLAS init took 1.3e-05 seconds.
-	Loading Geometry and BLAS construction took 0.312111 seconds.
+	BLAS boundingBox Compute took 0.056825 seconds.
+	BLAS init took 0.001168 seconds.
+	Loading Geometry and BLAS construction took 0.280542 seconds.
+	Loading Geometry took 0.281389 seconds.
+	Managing 13648 triangles.
+	Loading Geometry took 0.282616 seconds.
+	Managing 13648 triangles.
+	BLAS construction took 0.000146 seconds.
+	BLAS construction took 0.00015 seconds.
+	Total bounding box is (-0.195440, -0.001297, -0.596678) -> (0.195440, 0.645023, -0.084961)
+	BLAS boundingBox Compute took 0.045005 seconds.
+	Total bounding box is (-0.616840, -0.001297, -0.296678) -> (-0.225960, 0.645023, 0.215039)
+	BLAS boundingBox Compute took 	BLAS init took 0.043894 seconds.
+	Loading Geometry and BLAS construction took 0.088814 seconds.
+0.370451 seconds.
+	BLAS init took 1.4e-05 seconds.
+	Loading Geometry and BLAS construction took 0.371627 seconds.
 Reading mesh light.obj ...
 	Total area of all triangles is 0.178600
-	Loading Geometry took 0.018943 seconds.
+	Loading Geometry took 0.000296 seconds.
 	Managing 2 triangles.
-	BLAS construction took 1.2e-05 seconds.
+	BLAS construction took 1.1e-05 seconds.
 	Total bounding box is (-0.240100, 1.579900, -0.220100) -> (0.230100, 1.580100, 0.160100)
-	BLAS boundingBox Compute took 4.8e-05 seconds.
-	BLAS init took 7e-06 seconds.
-	Loading Geometry and BLAS construction took 0.019025 seconds.
-Loading all Geometry took 0.627638 seconds.
+	BLAS boundingBox Compute took 4.5e-05 seconds.
+	BLAS init took 6e-06 seconds.
+	Loading Geometry and BLAS construction took 0.000374 seconds.
+Loading all Geometry took 0.596109 seconds.
 TLAS contains 6 meshes and 1 emitters.
+UV infinite for dir (nan, nan, nan)
+UV infinite for dir (nan, nan, nan)
+UV infinite for dir (nan, nan, nan)
+UV infinite for dir (nan, nan, nan)
+UV infinite for dir (nan, nan, nan)
+UV infinite for dir (nan, nan, nan)
+UV infinite for dir (nan, nan, nan)
+UV infinite for dir (nan, nan, nan)
+UV infinite for dir (nan, nan, nan)
+UV infinite for dir (nan, nan, nan)
+UV infinite for dir (nan, nan, nan)
 Starting denoise...Writing resulting image to disk...
 No OIDN devices found.
 OIDN Error: no supported devices found
 Saving images completed.
-Total time: 21927ms
+Total time: 22681ms
 
 Process finished with exit code 0

@@ -2,7 +2,7 @@
 // Created by steinraf on 05.04.25.
 //
 
-#include "gui.h"
+#include "gui.cuh"
 
 #include "imgui.h"
 
@@ -158,12 +158,6 @@ void GUI::loop(Scene &scene) {
             if(needsRender){
                 renderer_viewport->renderFrame();
 
-            }else{
-                const auto availableSize = ImVec2{
-                        ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x,
-                        ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y,
-                };
-                ImGui::Image(scene.hostImageTexture, availableSize);
             }
 
             Vector3f vCamera{0.f};

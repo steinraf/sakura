@@ -130,17 +130,21 @@ add_executable(CustomRenderer
         src_old/utility/frame.h
         src_old/textures/imageTexture.cu
         src_old/shapes/triangle.cu
-        src_old/denoise/denoise.cu
+
         src_old/utility/vector.cuh
+
 
         src/camera/camera.cuh
         src/common.h
-        src/gui/gui.cpp
-        src/gui/viewport.cu
-        src/statistics/statistics.h
+        src/denoise/denoise.cu
+        src/denoise/featureBuffer.cu
         src/emitters/environmentEmitter.cuh
         src/emitters/areaLight.cu
         src/emitters/queryRecord.cuh
+        src/gui/gui.cu
+        src/gui/viewport.cu
+        src/statistics/statistics.h
+
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:

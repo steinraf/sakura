@@ -76,7 +76,7 @@ __global__ void denoise(Vector3f *input, Vector3f *output, FeatureBuffer feature
 
     //        output[pixelIndex] = Vector3f{(featureBuffer[pixelIndex].position-cameraOrigin).norm()/200};
 //                    output[pixelIndex] = featureBuffer.normals[pixelIndex].absValues();
-                    output[pixelIndex] = featureBuffer.albedos[pixelIndex];
+//                    output[pixelIndex] = featureBuffer.albedo[pixelIndex];
 //    output[pixelIndex] = featureBuffer.variances[pixelIndex];
     //        output[pixelIndex] = Color3f(featureBuffer.variances[pixelIndex].norm());
 //            constexpr float numSamples = 16384.f;
@@ -94,7 +94,7 @@ __global__ void denoise(Vector3f *input, Vector3f *output, FeatureBuffer feature
 }
 
 
-GPU_ONLY void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBuffer &featureBuffer, float *weights, int i, int j, int width, int height){
+GPU_ONLY void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBuffer *featureBuffer, float *weights, int i, int j, int width, int height){
 
 
     //        constexpr int neighbourDiameter = 21;
@@ -114,12 +114,12 @@ GPU_ONLY void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBu
             for(int pI = max(0, pixelI - patchDiameter / 2); pI < min(width, pixelI + patchDiameter / 2 + 1); ++pI) {
                 for(int pJ = max(0, pixelJ - patchDiameter / 2); pJ < min(height, pixelJ + patchDiameter / 2 + 1); ++pJ) {
                     const int pIndex = pJ * width + pI;
-                    const Vector3f pVarianceMean = featureBuffer.variances[pIndex]/static_cast<float>(featureBuffer.numSubSamples[pIndex]);
+                    const Vector3f pVarianceMean = featureBuffer->color[pIndex].getSampleVariance();
 
                     for(int qI = max(0, pixelQI - patchDiameter / 2); qI < min(width, pixelQI + patchDiameter / 2 + 1); ++qI) {
                         for(int qJ = max(0, pixelQJ - patchDiameter / 2); qJ < min(height, pixelQJ + patchDiameter / 2 + 1); ++qJ) {
                             const int qIndex = qJ * width + qI;
-                            const Vector3f qVarianceMean = featureBuffer.variances[qIndex]/static_cast<float>(featureBuffer.numSubSamples[qIndex]);
+                            const Vector3f qVarianceMean = featureBuffer->color[qIndex].getSampleVariance();
 
                             for(int col = 0; col < 3; ++col) {
                                 meanDist += (powf(input[pIndex][col] - input[qIndex][col], 2) - (pVarianceMean[col] + min(qVarianceMean[col], pVarianceMean[col]))) / (EPSILON + k * k * (pVarianceMean[col] + qVarianceMean[col]));

@@ -37,6 +37,15 @@ struct ColorToNorm{
     }
 };
 
+struct OpenGLSharedBuffer{
+    GLuint texture;
+    cudaGraphicsResource_t resource;
+    FeatureBuffer *featureBuffer;
+    cudaSurfaceObject_t surface;
+    size_t width, height;
+
+    CPU_ONLY explicit OpenGLSharedBuffer(size_t width, size_t height);
+};
 
 class Scene {
 public:
@@ -87,26 +96,11 @@ private:
 
     const Device device;
 
-    Vector3f *deviceImageBuffer;
-
-    FeatureBuffer deviceFeatureBuffer;
-
-    Vector3f *deviceImageBufferDenoised;
-    const size_t imageBufferByteSize;
-
-    struct OpenGLSharedBuffer{
-        GLuint texture;
-        cudaGraphicsResource_t resource;
-        FeatureBuffer *featureBuffer;
-        cudaSurfaceObject_t surface;
-    };
-
-//    OpenGLSharedBuffer hostImageBuffer;
-//    OpenGLSharedBuffer deviceImageBufferDenoised;
 
 
-    Vector3f *hostImageBuffer;
-    Vector3f *hostImageBufferDenoised;
+    OpenGLSharedBuffer imageBuffer;
+    OpenGLSharedBuffer imageBufferDenoised;
+
 
     std::vector<thrust::device_vector<Triangle>> hostDeviceMeshTriangleVec;
     std::vector<thrust::device_vector<float>> hostDeviceMeshCDF;
@@ -129,7 +123,5 @@ private:
 
 
 public:
-
-    GLuint hostImageTexture;
 
 };

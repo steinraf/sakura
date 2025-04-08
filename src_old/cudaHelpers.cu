@@ -285,12 +285,17 @@ namespace cudaHelpers {
     }
 
 
-    __global__ void render(Vector3f *output, Camera cam, TLAS *tlas, int width, int height, int numSubsamples,
-                           int maxRayDepth, curandState *globalRandState, FeatureBuffer featureBuffer, unsigned *progressCounter) {
+    __global__ void render(Camera cam, TLAS *tlas, int width, int height, int numSubsamples,
+                           int maxRayDepth, curandState *globalRandState, FeatureBuffer *featureBuffer) {
         int i, j, pixelIndex;
         bool inBounds = initIndices(i, j, pixelIndex, width, height);
 
+
         __shared__ int counter[1];
+        if(pixelIndex >= width * height) {
+            return;
+        }
+        assert(featureBuffer);
 
         if(threadIdx.x == 0 && threadIdx.y == 0)
             counter[0] = 0;
@@ -309,8 +314,6 @@ namespace cudaHelpers {
 
         //welfords algorithm to compute variance
 //        Color3f mean{0.f}, m2{0.f};
-
-        FeatureBufferAccumulator tmpBuffer;
         //TODO add variance computations
 
         int actualSamples = numSubsamples;
@@ -350,15 +353,16 @@ namespace cudaHelpers {
             const auto ray = cam.getRay(s, t, sampler.getSample2D());
 
 
-            const Vector3f currentColor = getColor(ray, tlas, maxRayDepth, sampler, tmpBuffer, pixelIndex);
+            const Vector3f currentColor = getColor(ray, tlas, maxRayDepth, sampler, featureBuffer, pixelIndex);
 
+            featureBuffer->color[pixelIndex].addElement(currentColor);
 
 //            const Vector3f delta = currentColor - mean;
 //            mean += delta / static_cast<float>(subSamples + 1);
 //            const Vector3f delta2 = currentColor - mean;
 //            m2 += delta * delta2;
 
-            totalColor += currentColor;
+//            totalColor += currentColor;
 
             //TODO redirect samples to pixels that need it
 //            assert(false);
@@ -378,19 +382,60 @@ namespace cudaHelpers {
 //        assert(actualSamples - 1 > 0);
 //        const Vector3f unbiasedVarianceMean = m2 / (static_cast<float>(actualSamples - 1));
 
-        const auto totalSamples = actualSamples + featureBuffer.numSubSamples[pixelIndex];
+//        const auto totalSamples = actualSamples + featureBuffer.numSubSamples[pixelIndex];
+//
+//        const Vector3f outVec = (totalColor/*.gammaCorrected()*/ + output[pixelIndex] * featureBuffer.numSubSamples[pixelIndex]) / totalSamples;
+//
+//        featureBuffer.albedos[pixelIndex] = tmpBuffer.albedo;
+//        featureBuffer.normals[pixelIndex] = tmpBuffer.normal;
+//        featureBuffer.positions[pixelIndex] = tmpBuffer.position;
 
-        const Vector3f outVec = (totalColor/*.gammaCorrected()*/ + output[pixelIndex] * featureBuffer.numSubSamples[pixelIndex]) / totalSamples;
-
-        featureBuffer.albedos[pixelIndex] = tmpBuffer.albedo;
-        featureBuffer.normals[pixelIndex] = tmpBuffer.normal;
-        featureBuffer.positions[pixelIndex] = tmpBuffer.position;
-
-        output[pixelIndex] = outVec;
+//        output[pixelIndex] = featureBuffer->color[pixelIndex].getMean();
 
         //TODO reintroduce variance computation
 //        featureBuffer.variances[pixelIndex] = unbiasedVarianceMean;
-        featureBuffer.numSubSamples[pixelIndex] = totalSamples;
+//        featureBuffer.numSubSamples[pixelIndex] = totalSamples;
+    }
+
+    __device__ Vec3f tonemap(Vec3f color) {
+
+        auto gammaCorrect = [] __device__(float x) {
+            auto clamp = [] __device__(float x, float min, float max) {
+                if(std::isinf(x) || std::isnan(x)) return min;
+                return x < min ? min : (x > max ? max : x);
+            };
+
+            if(x <= 0.0031308f) return clamp(12.92f * x, 0.f, 1.f);
+            return clamp(1.055f * std::pow(x, 1.f / 2.4f) - 0.055f, 0.f,
+                         1.f);
+        };
+
+        for(int c = 0; c < 3; ++c) {
+            color[c] = gammaCorrect(color[c]);
+            assert(color[c] <= 1.0);
+        }
+        return color;
+    }
+
+    __global__ void bufferToSurface(cudaSurfaceObject_t surface, FeatureBuffer *buffer, unsigned int width, unsigned int height) {
+        for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
+            pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
+            size_t x = pixelIndex % width, y = pixelIndex / width;
+
+            auto color = tonemap(buffer->color[pixelIndex].getMean());
+
+            auto toChar = [](float x) {
+                return static_cast<unsigned char>(std::clamp(x * 255.f, 0.f, 255.f));
+            };
+
+            uchar4 color4 = make_uchar4(toChar(color[0]),
+                                        toChar(color[1]),
+                                        toChar(color[2]),
+                                        255);
+
+
+            surf2Dwrite(color4, surface, x * sizeof(uchar4), y);
+        }
     }
 
 }// namespace cudaHelpers
