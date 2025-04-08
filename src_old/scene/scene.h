@@ -25,23 +25,11 @@
 #include <GLFW/glfw3.h>
 
 
-enum Device {
-    CPU,
-    GPU
-};
-
-
-struct ColorToNorm{
-    __device__ constexpr float operator()(const Vector3f &vec) const noexcept {
-        return vec.norm();
-    }
-};
-
 struct OpenGLSharedBuffer{
-    GLuint texture;
-    cudaGraphicsResource_t resource;
-    FeatureBuffer *featureBuffer;
-    cudaSurfaceObject_t surface;
+    GLuint texture{};
+    cudaGraphicsResource_t resource{};
+    FeatureBuffer *featureBuffer{};
+    cudaSurfaceObject_t surface{};
     size_t width, height;
 
     CPU_ONLY explicit OpenGLSharedBuffer(size_t width, size_t height);
@@ -50,9 +38,7 @@ struct OpenGLSharedBuffer{
 
 class Scene {
 public:
-    __host__ explicit Scene(SceneRepresentation &&sceneRepr, Device = CPU);
-
-    __host__ ~Scene();
+    __host__ explicit Scene(SceneRepresentation &&sceneRepr);
 
     [[nodiscard]] __host__ bool render();
 
@@ -82,7 +68,7 @@ public:
         return 100.f * actualSamples / sceneRepresentation.sceneInfo.samplePerPixel;
     }
 
-
+    bool denoiserEnabled = false;
 
 
 private:
@@ -95,12 +81,14 @@ private:
 
     const dim3 blockSize;
 
-    const Device device;
+
 
 
 
     OpenGLSharedBuffer imageBuffer;
     OpenGLSharedBuffer imageBufferDenoised;
+    float *denoiseWeights;
+    Vec3f *denoiseOutput;
 
 
     std::vector<thrust::device_vector<Triangle>> hostDeviceMeshTriangleVec;
@@ -116,9 +104,9 @@ private:
     Vector3f cameraVelocity{0.f};
 
 
-    TLAS *meshAccelerationStructure;
+    TLAS *meshAccelerationStructure{};
 
-    curandState *deviceCurandState;
+    curandState *deviceCurandState{};
 
     int actualSamples = 0;
 

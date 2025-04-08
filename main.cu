@@ -28,7 +28,7 @@ int main(int argc, char **argv){
             .applicationTitle = "Sakura",
             .fullscreen = false,
     });
-    Scene scene(SceneRepresentation(filePath), Device::CPU);
+    auto scene = Scene{SceneRepresentation(filePath)};
 
     bool needsRender = true;
 

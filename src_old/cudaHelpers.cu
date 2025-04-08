@@ -47,11 +47,6 @@ namespace cudaHelpers {
     }
 
 
-    __global__ void freeVariables() {
-        int i, j, pixelIndex;
-        if(!initIndices(i, j, pixelIndex, 1, 1)) return;
-    }
-
     enum class BOUNDARY {
         PERIODIC,
         REFLECTING,
@@ -288,19 +283,8 @@ namespace cudaHelpers {
     __global__ void render(Camera cam, TLAS *tlas, int width, int height, int numSubsamples,
                            int maxRayDepth, curandState *globalRandState, FeatureBuffer *featureBuffer) {
         int i, j, pixelIndex;
-        bool inBounds = initIndices(i, j, pixelIndex, width, height);
+        if(!initIndices(i, j, pixelIndex, width, height)) return;
 
-
-        __shared__ int counter[1];
-        if(pixelIndex >= width * height) {
-            return;
-        }
-        assert(featureBuffer);
-
-        if(threadIdx.x == 0 && threadIdx.y == 0)
-            counter[0] = 0;
-
-        __syncthreads();
 
         auto sampler = Sampler(&globalRandState[pixelIndex]);
 
@@ -310,12 +294,6 @@ namespace cudaHelpers {
         const auto widthFloat = static_cast<float>(width);
         const auto heightFloat = static_cast<float>(height);
 
-        Color3f totalColor{0.0f};
-
-        //welfords algorithm to compute variance
-//        Color3f mean{0.f}, m2{0.f};
-        //TODO add variance computations
-
         int actualSamples = numSubsamples;
 
         for(int subSamples = 0; subSamples < numSubsamples; ++subSamples) {
@@ -323,78 +301,12 @@ namespace cudaHelpers {
             const float s = (iFloat + sampler.getSample1D()) / (widthFloat + 1);
             const float t = (jFloat + sampler.getSample1D()) / (heightFloat + 1);
 
-////            //SampleVisualization remember to set xml scene size to dimension
-//            EmitterQueryRecord eQR{Vector3f{0.f}};
-//            if(i % 3 != 0 || j % 3 != 0) return;
-//            auto sample = tlas->environmentEmitter.sample(eQR, sampler.getSample3D());
-//            const int pixelCoord = static_cast<int>((eQR.uv[1]*height)*width + eQR.uv[0]*width);
-//            Vector3f::atomicCudaAdd(output + pixelCoord,  tlas->environmentEmitter.pdf(eQR) * width * height  * Vector3f{1.f, 1.f, 1.f});
-//            return;
-
-//            //Texture CDF
-//            const Texture &texture = tlas->environmentEmitter.texture;
-////            printf("Index is %f\n", static_cast<int>(t*height * width + s*width)*1.f/width/height);
-//            const float cdfRowStart = texture.deviceCDF[static_cast<int>(jFloat * texture.width)];
-//            const float cdfColPrev = [&](){
-//                if(j == 0) return 0.f;
-//                return texture.deviceCDF[static_cast<int>((jFloat-1) * texture.width + iFloat)];
-//            }();
-//            const float cdf = texture.deviceCDF[static_cast<int>(jFloat * texture.width + iFloat)];
-//            const float cdfRowEnd = texture.deviceCDF[static_cast<int>(jFloat * texture.width + width - 1)];
-//            const float cdfColNext = [&](){
-//                if(j == height-1) return 1.f;
-//                return texture.deviceCDF[static_cast<int>((jFloat+1) * texture.width + iFloat)];
-//            }();
-//            if(sampler.getSample1D() < 0.01f)
-//                printf("CDF (%f, %f, %i)->%f\n", s, t, static_cast<int>(jFloat*texture.width + iFloat), cdf);
-//            output[pixelIndex] = Color3f{0.f*(cdf-cdfColPrev)/(cdfColNext-cdfColPrev), (cdf-cdfRowStart)/(cdfRowEnd - cdfRowStart), 0};
-//            return;
-
             const auto ray = cam.getRay(s, t, sampler.getSample2D());
-
 
             const Vector3f currentColor = getColor(ray, tlas, maxRayDepth, sampler, featureBuffer, pixelIndex);
 
             featureBuffer->color[pixelIndex].addElement(currentColor);
-
-//            const Vector3f delta = currentColor - mean;
-//            mean += delta / static_cast<float>(subSamples + 1);
-//            const Vector3f delta2 = currentColor - mean;
-//            m2 += delta * delta2;
-
-//            totalColor += currentColor;
-
-            //TODO redirect samples to pixels that need it
-//            assert(false);
-            //Adaptive sampling
-//            if(!updatedVariance && subSamples > 64 && (m2 / static_cast<float>((subSamples - 1))).maxCoeff() < EPSILON) {
-//                atomicAdd(counter, 1);
-//                updatedVariance = true;
-//            }
-//            if(counter[0] >= blockDim.x*blockDim.y){
-//                assert(updatedVariance);
-//                actualSamples = subSamples;
-//                break;
-//            }
         }
-        
-
-//        assert(actualSamples - 1 > 0);
-//        const Vector3f unbiasedVarianceMean = m2 / (static_cast<float>(actualSamples - 1));
-
-//        const auto totalSamples = actualSamples + featureBuffer.numSubSamples[pixelIndex];
-//
-//        const Vector3f outVec = (totalColor/*.gammaCorrected()*/ + output[pixelIndex] * featureBuffer.numSubSamples[pixelIndex]) / totalSamples;
-//
-//        featureBuffer.albedos[pixelIndex] = tmpBuffer.albedo;
-//        featureBuffer.normals[pixelIndex] = tmpBuffer.normal;
-//        featureBuffer.positions[pixelIndex] = tmpBuffer.position;
-
-//        output[pixelIndex] = featureBuffer->color[pixelIndex].getMean();
-
-        //TODO reintroduce variance computation
-//        featureBuffer.variances[pixelIndex] = unbiasedVarianceMean;
-//        featureBuffer.numSubSamples[pixelIndex] = totalSamples;
     }
 
     __device__ Vec3f tonemap(Vec3f color) {
@@ -423,6 +335,27 @@ namespace cudaHelpers {
             size_t x = pixelIndex % width, y = pixelIndex / width;
 
             auto color = tonemap(buffer->color[pixelIndex].getMean());
+
+            auto toChar = [](float x) {
+                return static_cast<unsigned char>(std::clamp(x * 255.f, 0.f, 255.f));
+            };
+
+            uchar4 color4 = make_uchar4(toChar(color[0]),
+                                        toChar(color[1]),
+                                        toChar(color[2]),
+                                        255);
+
+
+            surf2Dwrite(color4, surface, x * sizeof(uchar4), y);
+        }
+    }
+
+    __global__ void vecToSurface(cudaSurfaceObject_t surface, Vec3f *buffer, unsigned int width, unsigned int height) {
+        for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
+            pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
+            size_t x = pixelIndex % width, y = pixelIndex / width;
+
+            auto color = tonemap(buffer[pixelIndex]);
 
             auto toChar = [](float x) {
                 return static_cast<unsigned char>(std::clamp(x * 255.f, 0.f, 255.f));

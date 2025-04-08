@@ -14,6 +14,7 @@
 
 namespace Warp {
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU_INLINE Vector3f sampleUniformHemisphere(Sampler &sampler, const Vector3f &pole) noexcept {
         // Naive implementation using rejection sampling
         Vector3f v;
@@ -30,24 +31,29 @@ namespace Warp {
         return v;
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr Vector2f squareToUniformSquare(const Vector2f &sample) noexcept {
         return sample;
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr float squareToUniformSquarePdf(const Vector2f &sample) noexcept {
         return 1.f;
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr Vector2f squareToUniformDisk(const Vector2f &sample) noexcept {
         const float r = sqrt(sample[0]);
         const float phi = (2 * sample[1] - 1) * M_PIf;
         return {r * sin(phi), r * cos(phi)};
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr float squareToUniformDiskPdf(const Vector2f &p) noexcept {
         return static_cast<float>(p.squaredNorm() <= 1) * M_1_PIf;
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr Vector3f squareToUniformSphereCap(const Vector2f &sample, float cosThetaMax) noexcept {
         const float cosT = sample[0] * (1 - cosThetaMax) + cosThetaMax;
         const float phi = 2 * M_PIf * sample[1];
@@ -58,10 +64,12 @@ namespace Warp {
                 cosT};
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr float squareToUniformSphereCapPdf(const Vector3f &v, float cosThetaMax) noexcept {
         return static_cast<float>(v[2] >= cosThetaMax) * M_1_PIf / (2.f - 2.f * cosThetaMax);
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr Vector3f squareToUniformSphere(const Vector2f &sample) noexcept{
         float cosT = 2 * sample[0] - 1;
         float phi = 2 * M_PIf * sample[1];
@@ -72,28 +80,34 @@ namespace Warp {
                 cosT};
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr float squareToUniformSpherePdf(const Vector3f &v) noexcept {
         return static_cast<float>((v.squaredNorm() - 1.f) < EPSILON) * M_1_PIf / 4.f;
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr Vector3f squareToUniformHemisphere(const Vector2f &sample) noexcept {
         return squareToUniformSphereCap(sample, 0.f);
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr float squareToUniformHemispherePdf(const Vector3f &v) noexcept{
         return squareToUniformSphereCapPdf(v, 0);
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr Vector3f squareToCosineHemisphere(const Vector2f &sample) noexcept {
         auto p = squareToUniformDisk(sample);
         float z = sqrt(1 - p[0] * p[0] - p[1] * p[1]);
         return {p[0], p[1], z};
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr float squareToCosineHemispherePdf(const Vector3f &v) noexcept {
         return v[2] < 0 ? 0.f : v[2] * M_1_PIf;
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr Vector3f squareToBeckmann(const Vector2f &sample, float alpha) noexcept {
         const float cosTheta = sqrt(1.f / (1 - alpha * alpha * log(1 - sample[0])));
         const float phi = sample[1] * 2 * M_PIf;
@@ -104,6 +118,7 @@ namespace Warp {
                 cosTheta};
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr float squareToBeckmannPdf(const Vector3f &m, float alpha) noexcept {
         const float cosT3 = m[2] * m[2] * m[2];
         if(cosT3 < WARP_EPSILON) return 0;
@@ -111,12 +126,14 @@ namespace Warp {
         return exp((1.f - 1.f / (m[2] * m[2])) * alphaI2) * M_1_PIf * alphaI2 / (cosT3);
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr Vector3f squareToUniformTriangle(const Vector2f &sample) noexcept {
         float su1 = sqrtf(sample[0]);
         float u = 1.f - su1, v = sample[1] * su1;
         return {u, v, 1.f - u - v};
     }
 
+    [[maybe_unused]]
     [[nodiscard]] CPU_GPU constexpr size_t sampleCDF(float sample, const float *start, const float *ending) noexcept {
 
         const float *begin = start, *end = ending;

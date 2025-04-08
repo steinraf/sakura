@@ -132,7 +132,10 @@ CPU_GPU_CONSTEXPR Ray3f Camera::getRay(float s, float t, const Vector2f &sample)
 }
 
 CPU_GPU_CONSTEXPR void Camera::addVelocityRelative(const Vector3f &v, float t) noexcept {
-    cameraToWorld.addPosition((v[0] * right + v[1] * up + v[2] * front)* t);
+
+    auto vel = v.applyTransform(cameraToWorld, true);
+
+    cameraToWorld.addPosition(vel * t);
 }
 
 CPU_GPU_CONSTEXPR Vector3f Camera::getPosition() const noexcept{

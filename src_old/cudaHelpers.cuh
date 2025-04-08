@@ -568,6 +568,7 @@ namespace cudaHelpers {
            int maxRayDepth, curandState *globalRandState, FeatureBuffer *featureBuffer);
 
     __global__ void bufferToSurface(cudaSurfaceObject_t surface, FeatureBuffer *buffer, unsigned int width, unsigned int height);
+    __global__ void vecToSurface(cudaSurfaceObject_t surface, Vec3f *buffer, unsigned int width, unsigned int height);
 
 
 

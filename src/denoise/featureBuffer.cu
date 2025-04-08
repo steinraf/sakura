@@ -28,6 +28,29 @@ void FeatureBuffer::clear() {
     checkCudaErrors(cudaDeviceSynchronize());
 }
 
+__global__ void decayFeatureBuffer(FeatureBuffer *buffer, float k) {
+
+    auto idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(idx >= buffer->numElements) {
+        return;
+    }
+
+    buffer->color[idx].scale(k);
+    buffer->normal[idx].scale(k);
+    buffer->position[idx].scale(k);
+    buffer->albedo[idx].scale(k);
+    buffer->uv[idx].scale(k);
+}
+
+void FeatureBuffer::decay(float k) {
+    int threadsPerBlock = 256;
+    size_t blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
+
+    decayFeatureBuffer<<<blocksPerGrid, threadsPerBlock>>>(this, k);
+    checkCudaErrors(cudaDeviceSynchronize());
+}
+
 
 
 __global__ void clearFeatureBuffer(FeatureBuffer *buffer) {

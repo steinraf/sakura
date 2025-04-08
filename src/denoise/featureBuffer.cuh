@@ -22,6 +22,7 @@ struct FeatureBuffer {
     __host__ ~FeatureBuffer();
 
     void __host__ clear();
+    void __host__ decay(float k);
 
     size_t numElements;
     Statistic<Vec3f> *color;

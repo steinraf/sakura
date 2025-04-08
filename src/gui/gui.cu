@@ -12,7 +12,6 @@
 #include "viewport.cuh"
 
 #include <GL/glew.h>
-#include <cuda_gl_interop.h>
 #include <thread>
 
 #include <iostream>
@@ -148,6 +147,8 @@ void GUI::loop(Scene &scene) {
 
             ImGui::Text("Camera Position (%f, %f, %f)", cameraPos[0], cameraPos[1], cameraPos[2]);
 
+            ImGui::Text("Denoiser Enabled: %s", scene.denoiserEnabled ? "true" : "false");
+
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
             ImGui::End();
         }
@@ -178,9 +179,20 @@ void GUI::loop(Scene &scene) {
             if(ImGui::IsKeyDown(ImGuiKey_LeftShift))
                 vCamera[1] -= 1.f;
 
+            if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl))
+                vCamera *= 0.1f;
+
+            if(ImGui::IsKeyDown(ImGuiKey_R))
+                scene.reset();
+
+            if(ImGui::IsKeyDown(ImGuiKey_MouseLeft))
+                scene.denoiserEnabled = true;
+            else
+                scene.denoiserEnabled = false;
+
             scene.setCameraVelocity(vCamera);
 
-            if(vCamera.squaredNorm() != 0.f)
+            if(vCamera.squaredNorm() != 0.f and not ImGui::IsKeyDown(ImGuiKey_R))
                 scene.reset();
             //            scene.denoise();
 

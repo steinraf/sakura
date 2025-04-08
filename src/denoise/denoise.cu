@@ -7,101 +7,16 @@
 //Denoise feature is a bit clumsy to use in current state
 //TODO add easier customizability
 
+#define DENOISER_EPSILON 1e-6f
 
-__global__ void denoiseApplyWeights(Vector3f *output, float *weights, int width, int height){
-    int i, j, pixelIndex;
-    if(!cudaHelpers::initIndices(i, j, pixelIndex, width, height)) return;
-//    if(weights[pixelIndex] == 0.f) {
-//#ifndef NDEBUG
-//        printf("Output would have been (%f, %f, %f)\n", output[pixelIndex][0], output[pixelIndex][1], output[pixelIndex][2]);
-//#endif
-//        output[pixelIndex] = Vector3f{0.f, 0.f, 1.f};
-//        return;
-//    }
-//    output[pixelIndex] /= weights[pixelIndex];
-}
-
-
-__global__ void denoise(Vector3f *input, Vector3f *output, FeatureBuffer featureBuffer, float *weights, int width, int height,
-                        Vector3f cameraOrigin) {
-    int i, j, pixelIndex;
-    if(!cudaHelpers::initIndices(i, j, pixelIndex, width, height)) return;
-
-    //        bilateralFilterWiki(input, output, i, j, width, height);
-//    bilateralFilterSlides(input, output, featureBuffer, weights, i, j, width, height);
-//    return;
-
-    //        auto getNeighbour = [i, j, width, height]__device__ (Vector3f *array, int dx, int dy,
-    //                                                             BOUNDARY boundary = BOUNDARY::PERIODIC) {
-    //            switch(boundary) {
-    //                case BOUNDARY::PERIODIC:
-    //                    return array[(j + height + dy) % height * width + (i + width + dx) % width];
-    //                case BOUNDARY::REFLECTING:
-    //                    //TODO implement?
-    //                    assert(false && "Not implemented.");
-    ////                    break;
-    //                case BOUNDARY::ZERO:
-    //                    if(i >= 0 && i < width && j >= 0 && j < height)
-    //                        return array[j*width + i];
-    //
-    //                    return Vector3f{0.f};
-    //            }
-    //        };
-
-    //        const int m_radius = 2;
-    //        const float m_stddev = 0.5f;
-    //
-    //        const float alpha = -1.0f / (2.0f * m_stddev * m_stddev);
-    //        const float constant = std::exp(alpha * m_radius * m_radius);
-
-
-    //        auto gaussian = [alpha, constant] __device__ (float x){
-    //            return max(0.0f, std::exp(alpha * x * x) - constant);
-    //        };
-
-    //        float integral = 0.f;
-    //        Vector3f tmp{0.f};
-
-    //        for(int xNew = -m_radius; xNew <= m_radius; ++xNew) {
-    //            for(int yNew = -m_radius + 1; yNew < m_radius; ++yNew){
-    //                const float gaussianContrib = gaussian(sqrtf(xNew*xNew + yNew*yNew));
-    //                tmp += gaussianContrib * getNeighbour(input, xNew, yNew);
-    //                integral += gaussianContrib;
-    //            }
-    //        }
-    //
-    //        output[pixelIndex] = tmp/integral;
-
-    //TODO when modifying something here, remember to maybe uncomment weights application
-
-    //        output[pixelIndex] = Vector3f{(featureBuffer[pixelIndex].position-cameraOrigin).norm()/200};
-//                    output[pixelIndex] = featureBuffer.normals[pixelIndex].absValues();
-//                    output[pixelIndex] = featureBuffer.albedo[pixelIndex];
-//    output[pixelIndex] = featureBuffer.variances[pixelIndex];
-    //        output[pixelIndex] = Color3f(featureBuffer.variances[pixelIndex].norm());
-//            constexpr float numSamples = 16384.f;
-//            output[pixelIndex] = Vector3f{powf(static_cast<float>(featureBuffer.numSubSamples[pixelIndex])/(numSamples), 2.f)};
-
-
-    //        if(featureBuffer[pixelIndex].variance.maxCoeff() > 0.1) {
-    //            output[pixelIndex] = 0.25 * getNeighbour(input, 0, -1) + 0.25 * getNeighbour(input, 1, 0) + 0.25 * getNeighbour(input, 0, 1) + 0.25 * getNeighbour(input, -1, 0);
-    //        }
-    //        else {
-    //            output[pixelIndex] = input[pixelIndex];
-    //        }
-
-    //        output[pixelIndex] = Color3f(featureBuffer[pixelIndex].variance.norm());
-}
-
-
-GPU_ONLY void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBuffer *featureBuffer, float *weights, int i, int j, int width, int height){
+GPU_ONLY void bilateralFilterSlides(FeatureBuffer *featureBuffer, Vec3f *output, float *weights, int i, int j, int width, int height){
 
 
     //        constexpr int neighbourDiameter = 21;
     //        constexpr int patchDiameter = 7;
 
-    constexpr int neighbourDiameter = 11;
-    constexpr int patchDiameter = 7     ;
+    constexpr int neighbourDiameter = 5;
+    constexpr int patchDiameter = 2;
 
     constexpr float k = 0.45f;
 
@@ -114,15 +29,17 @@ GPU_ONLY void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBu
             for(int pI = max(0, pixelI - patchDiameter / 2); pI < min(width, pixelI + patchDiameter / 2 + 1); ++pI) {
                 for(int pJ = max(0, pixelJ - patchDiameter / 2); pJ < min(height, pixelJ + patchDiameter / 2 + 1); ++pJ) {
                     const int pIndex = pJ * width + pI;
+                    const Vector3f pMean = featureBuffer->color[pIndex].getMean();
                     const Vector3f pVarianceMean = featureBuffer->color[pIndex].getSampleVariance();
 
                     for(int qI = max(0, pixelQI - patchDiameter / 2); qI < min(width, pixelQI + patchDiameter / 2 + 1); ++qI) {
                         for(int qJ = max(0, pixelQJ - patchDiameter / 2); qJ < min(height, pixelQJ + patchDiameter / 2 + 1); ++qJ) {
                             const int qIndex = qJ * width + qI;
+                            const Vector3f qMean = featureBuffer->color[qIndex].getMean();
                             const Vector3f qVarianceMean = featureBuffer->color[qIndex].getSampleVariance();
 
                             for(int col = 0; col < 3; ++col) {
-                                meanDist += (powf(input[pIndex][col] - input[qIndex][col], 2) - (pVarianceMean[col] + min(qVarianceMean[col], pVarianceMean[col]))) / (EPSILON + k * k * (pVarianceMean[col] + qVarianceMean[col]));
+                                meanDist += (powf(pMean[col] - qMean[col], 2) - (pVarianceMean[col] + min(qVarianceMean[col], pVarianceMean[col]))) / (EPSILON + k * k * (pVarianceMean[col] + qVarianceMean[col]));
                             }
 
 //                            Vector3f minVec{
@@ -142,6 +59,7 @@ GPU_ONLY void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBu
 
 //            printf("Mean distance is %f\n", meanDist/(3 * patchDiameter * patchDiameter));
             float w = expf(-max(0.f, meanDist/(3 * patchDiameter * patchDiameter)));
+            if(w < DENOISER_EPSILON) w = DENOISER_EPSILON;
 
             for(int pI = max(0, pixelI - patchDiameter / 2); pI < min(width, pixelI + patchDiameter / 2 + 1); ++pI) {
                 for(int pJ = max(0, pixelJ - patchDiameter / 2); pJ < min(height, pixelJ + patchDiameter / 2 + 1); ++pJ) {
@@ -159,13 +77,151 @@ GPU_ONLY void bilateralFilterSlides(Vector3f *input, Vector3f *output, FeatureBu
                                 atomicAdd(&(v[1]), vec[1]);
                                 atomicAdd(&(v[2]), vec[2]);
                             };
-                            add(output + pIndex, w * input[qIndex]);
-//                            Vector3f::atomicCudaAdd(output + pIndex, w * input[qIndex]);
-
+                            add(output + pIndex, w * featureBuffer->color[qIndex].getMean());
                         }
                     }
                 }
             }
         }
     }
+}
+
+GPU_ONLY void removeFireflies(FeatureBuffer *bufferIn, Vec3f *output, float *weights, unsigned int x, unsigned int y, unsigned int width, unsigned int height) {
+
+    Color3f localMean = Color3f::Zero();
+    Vec3f localVariance = Vec3f::Zero();
+    float MAX_DIFF = 1.0f;
+    float FIREFLY_SCALE = 2.0f;
+    int numSamples = 0;
+    constexpr int MAX_RADIUS = 1;
+    for(int dx = -MAX_RADIUS; dx <= MAX_RADIUS; ++dx) {
+        for(int dy = -MAX_RADIUS; dy <= MAX_RADIUS; ++dy) {
+            int nx = x + dx, ny = y + dy;
+            if(nx < 0 || nx >= width || ny < 0 || ny >= height || (dy == 0 && dx == 0)) {
+                continue;
+            }
+            const Vec3f var = bufferIn->color[nx + ny * width].getSampleVariance();
+            localVariance += var;
+            localMean += bufferIn->color[nx + ny * width].getMean() ;
+
+            ++numSamples;
+        }
+    }
+
+    localVariance /= numSamples;
+    localMean /= numSamples;
+
+    Vec3f color = bufferIn->color[x + y * width].getMean();
+    Vec3f var = bufferIn->color[x + y * width].getSampleVariance();
+    auto nSamples = bufferIn->color[x + y * width].getNumElements();
+
+    if(FIREFLY_SCALE * localVariance.norm() < var.norm()){
+        float weight = 1.0f - tanh(var.norm() - FIREFLY_SCALE * localVariance.norm());
+        output[x + y * width] = weight * color + (1.0f - weight) * localMean;
+        weights[x + y * width] = 1.0f;
+
+    }else{
+        weights[x + y * width] = 0.0f;
+    }
+
+//    float diff = (color - localMean).norm();
+//
+//    if(diff > MAX_DIFF) {
+//        bufferIn->color[x + y * width].manipulateMean(localMean);
+//    }
+
+}
+
+GPU_ONLY void denoiseGaussian(const FeatureBuffer *bufferIn, Vec3f *output, float *weights, unsigned int x, unsigned int y, unsigned int width, unsigned int height) {
+    size_t pixelIndex = y * width + x;
+
+    // Simply apply gaussian blur
+    int MAX_RADIUS = 3;
+    constexpr float color_k = 0.7f, spatial_k = 0.005f, var_k = 1.0f;
+
+    Vec3f color = Vec3f::Zero();
+    float weight = 0.0f;
+
+    Vec3f pos = bufferIn->position[pixelIndex].getMean();
+    Vec3f var = bufferIn->color[pixelIndex].getSampleVariance();
+    Vec3f normal = bufferIn->normal[pixelIndex].getMean();
+    size_t numSamples = bufferIn->color[pixelIndex].getNumElements();
+
+    MAX_RADIUS = min(MAX_RADIUS, int(numSamples));
+
+    for(int dx = -MAX_RADIUS; dx <= MAX_RADIUS; ++dx) {
+        for(int dy = -MAX_RADIUS; dy < MAX_RADIUS; ++dy) {
+            int nx = x + dx, ny = y + dy;
+            if(nx < 0 || nx >= width || ny < 0 || ny >= height) {
+                continue;
+            }
+
+            Vec3f currentColor = bufferIn->color[nx + ny * width].getMean();
+            Vec3f currentVar = bufferIn->color[nx + ny * width].getSampleVariance();
+            Vec3f currentNormal = bufferIn->normal[nx + ny * width].getMean();
+
+            const float distanceSq = Vec2f{dx * 1.0f, dy * 1.0f}.squaredNorm();
+            const float spatialDistSq = (bufferIn->position[nx + ny * width].getMean() - pos).squaredNorm();
+            const float normalDot = std::abs(normal.dot(currentNormal));
+
+            const float varRatio = [&]() -> float {
+                if(var.minCoeff() < DENOISER_EPSILON) {
+                    return currentVar.maxCoeff() / DENOISER_EPSILON;
+                } else {
+                    return (currentVar / var).maxCoeff();
+                }
+            }();
+
+            const float gaussianScreenSpace = std::exp(-distanceSq / (color_k * color_k));
+            const float gaussianSpatial = std::exp(-spatialDistSq / (spatial_k * spatial_k));
+            const float gaussianVar = std::exp(-varRatio / (var_k * var_k));
+
+            float w = [&](){
+                if(numSamples < 4) {
+                    return gaussianScreenSpace;
+                }else{
+                    return gaussianSpatial * normalDot;
+                }
+            }();
+
+            color += currentColor * w;
+            weight += w;
+        }
+    }
+
+    if(weight < DENOISER_EPSILON) weight = DENOISER_EPSILON;
+
+    Vec3f localAverageColor = color / weight;
+
+    output[pixelIndex] = localAverageColor;
+    weights[pixelIndex] = 0.0f;
+}
+
+
+__global__ void denoiser(FeatureBuffer *featureBuffer, Vec3f *output, float *weights, int width, int height) {
+    int i, j, pixelIndex;
+    if(!cudaHelpers::initIndices(i, j, pixelIndex, width, height)) return;
+
+    removeFireflies(featureBuffer, output, weights, i, j, width, height);
+    bool hasSwapped = false;
+    auto previousState = featureBuffer->color[pixelIndex];
+    if(weights[pixelIndex] != 0.0){
+        featureBuffer->color[pixelIndex].manipulateMean(output[pixelIndex]);
+        weights[pixelIndex] = 0.0f;
+        hasSwapped = true;
+    }
+    __syncthreads();
+//    bilateralFilterWiki(input, output, i, j, width, height);
+//    bilateralFilterSlides(featureBuffer, output, weights, i, j, width, height);
+    denoiseGaussian(featureBuffer, output, weights, i, j, width, height);
+    __syncthreads();
+    if(weights[pixelIndex] < DENOISER_EPSILON) {
+        return;
+    }
+    output[pixelIndex] /= weights[pixelIndex];
+
+    if(hasSwapped){
+        featureBuffer->color[pixelIndex] = previousState;
+    }
+    return;
 }

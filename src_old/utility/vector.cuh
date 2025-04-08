@@ -104,6 +104,8 @@ public:
     [[nodiscard]] __host__ __device__ constexpr inline bool isZero() const noexcept;
 
     [[nodiscard]] __host__ __device__ constexpr inline float maxCoeff() const noexcept;
+    [[nodiscard]] __host__ __device__ constexpr inline float minCoeff() const noexcept;
+
 
     [[nodiscard]] __host__ __device__ constexpr inline bool isValid() const noexcept{
         return std::isfinite(data[0]) && std::isfinite(data[1]) && std::isfinite(data[2]);
@@ -497,6 +499,10 @@ Vector3f::applyTransform(const Matrix4f &transform, bool isTranslationInvariant)
 
 __host__ __device__ constexpr float Vector3f::maxCoeff() const noexcept {
     return std::max(data[0], std::max(data[1], data[2]));
+}
+
+__host__ __device__ constexpr float Vector3f::minCoeff() const noexcept {
+    return std::min(data[0], std::min(data[1], data[2]));
 }
 
 [[nodiscard]] __host__ __device__ constexpr inline Vector3f Vector3f::gammaCorrected() const noexcept{

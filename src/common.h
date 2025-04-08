@@ -52,6 +52,15 @@ public:
 
     // Welford's online algorithm to incrementally calculate variance
     CPU_GPU void addElement(T element) {
+        if constexpr (std::is_same_v<T, Vec3f>) {
+            if(!isfinite(element[0]) || !isfinite(element[1]) || !isfinite(element[2])) {
+                return;
+            }
+        } else {
+            if(!isfinite(element)) {
+                return;
+            }
+        }
         numElements++;
         T delta = element - mean;
         mean += delta / numElements;
@@ -78,6 +87,17 @@ public:
 
     [[nodiscard]] CPU_GPU size_t getNumElements() const {
         return numElements;
+    }
+
+    CPU_GPU void manipulate(float scale) const {
+        mean *= scale;
+        variance *= scale * scale;
+    }
+
+    CPU_GPU void manipulateMean(T newMean) {
+        T delta = newMean - mean;
+        mean = newMean;
+        variance += delta * delta * numElements;
     }
 
     CPU_GPU void clear() {

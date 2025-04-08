@@ -6,10 +6,10 @@
 #include "scene.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "../../src/denoise/denoise.h"
 #include "stb_image_write.h"
 
 #include <fstream>
-#include <thread>
 
 #include <OpenImageDenoise/oidn.hpp>
 
@@ -17,11 +17,12 @@
 #include <thrust/transform_reduce.h>
 
 
-__host__ Scene::Scene(SceneRepresentation &&sceneRepr, Device dev) : sceneRepresentation(sceneRepr),
+__host__ Scene::Scene(SceneRepresentation &&sceneRepr) : sceneRepresentation(sceneRepr),
                                                                      blockSize(sceneRepr.sceneInfo.width / blockSizeX + 1, sceneRepr.sceneInfo.height / blockSizeY + 1),
-                                                                     device(dev),
                                                                      imageBuffer(static_cast<size_t>(sceneRepr.sceneInfo.width), static_cast<size_t>(sceneRepr.sceneInfo.height)),
                                                                      imageBufferDenoised(static_cast<size_t>(sceneRepr.sceneInfo.width), static_cast<size_t>(sceneRepr.sceneInfo.height)),
+                                                                     denoiseWeights(nullptr),
+                                                                     denoiseOutput(nullptr),
                                                                      hostDeviceMeshTriangleVec(sceneRepresentation.meshInfos.size()),
                                                                      hostDeviceMeshCDF(sceneRepresentation.meshInfos.size()),
                                                                      totalMeshArea(sceneRepresentation.meshInfos.size()),
@@ -41,8 +42,8 @@ __host__ Scene::Scene(SceneRepresentation &&sceneRepr, Device dev) : sceneRepres
                                                                     {
 
 
-    assert(dev == CPU);
-    //TODO remove device mode
+    checkCudaErrors(cudaMallocManaged(&denoiseWeights, sizeof(float) * sceneRepr.sceneInfo.width * sceneRepr.sceneInfo.height));
+    checkCudaErrors(cudaMallocManaged(&denoiseOutput, sizeof(Vec3f) * sceneRepr.sceneInfo.width * sceneRepr.sceneInfo.height));
 
     const auto numPixels = sceneRepr.sceneInfo.width * sceneRepr.sceneInfo.height;
 
@@ -129,22 +130,15 @@ __host__ Scene::Scene(SceneRepresentation &&sceneRepr, Device dev) : sceneRepres
 
 }
 
-__host__ Scene::~Scene() {
-
-    //TODO properly cuda free buffers
-    if(device == CPU) {
-        checkCudaErrors(cudaDeviceSynchronize());
-    } else {
-
-    }
-    cudaHelpers::freeVariables<<<blockSize, threadSize>>>();
-}
 
 void Scene::reset() noexcept{
 
     //todo decay
     imageBuffer.featureBuffer->clear();
     imageBufferDenoised.featureBuffer->clear();
+
+//    imageBuffer.featureBuffer->decay(0.5f);
+//    imageBufferDenoised.featureBuffer->decay(0.5f);
 
 
     actualSamples = 0;
@@ -158,9 +152,7 @@ bool Scene::render() {
     if(actualSamples >= sceneRepresentation.sceneInfo.samplePerPixel)
         return false;
 
-    //todo Exponentially increasing number of samples
-    const auto samplesRemaining = std::clamp(1, 1, sceneRepresentation.sceneInfo.samplePerPixel - actualSamples);
-//    auto samplesRemaining = CustomRenderer::min(CustomRenderer::max(1, actualSamples), );
+    int spp = 1;
 
     int devId = 0;
     int numSMs;
@@ -171,48 +163,57 @@ bool Scene::render() {
     assert(imageBuffer.featureBuffer);
 
     cudaHelpers::render<<<blockSize, threadSize>>>(deviceCamera, meshAccelerationStructure,
-                                                   sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height, samplesRemaining, sceneRepresentation.sceneInfo.maxRayDepth,
+                                                   sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height, spp, sceneRepresentation.sceneInfo.maxRayDepth,
                                                    deviceCurandState, imageBuffer.featureBuffer);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
+
+
+
+
+
     cudaHelpers::bufferToSurface<<<32 * numSMs, 256>>>(imageBuffer.surface, imageBuffer.featureBuffer, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
     checkCudaErrors(cudaDeviceSynchronize());
 
-
-    actualSamples += samplesRemaining;
-
-//#ifndef NDEBUG
-//
-//    ColorToNorm colorToNorm;
-//
-//    thrust::device_ptr<Vector3f> deviceTexturePtr{deviceImageBuffer};
-//    float totalSum = thrust::transform_reduce(deviceTexturePtr, deviceTexturePtr + sceneRepresentation.sceneInfo.width * sceneRepresentation.sceneInfo.height,
-//                                              colorToNorm, 0.f, thrust::plus<float>());
-//#endif
-
-    if(actualSamples == samplesRemaining){
-
+    if(denoiserEnabled){
+        denoiser<<<blockSize, threadSize>>>(imageBuffer.featureBuffer, denoiseOutput, denoiseWeights, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
+        checkCudaErrors(cudaDeviceSynchronize());
+        cudaHelpers::vecToSurface<<<32 * numSMs, 256>>>(imageBufferDenoised.surface, denoiseOutput, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
+        checkCudaErrors(cudaDeviceSynchronize());
     }
+
+
+
+    actualSamples += spp;
 
     const auto availableSize = ImVec2{
             ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x,
             ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y,
     };
-    glClear(GL_COLOR_BUFFER_BIT);
-    glBindTexture(GL_TEXTURE_2D, imageBuffer.texture);
-    glBegin(GL_QUADS);
-    glTexCoord2f(0, 0);
-    glVertex2f(-1, -1);
-    glTexCoord2f(1, 0);
-    glVertex2f(1, -1);
-    glTexCoord2f(1, 1);
-    glVertex2f(1, 1);
-    glTexCoord2f(0, 1);
-    glVertex2f(-1, 1);
-    glEnd();
 
-    ImGui::Image(imageBuffer.texture, ImVec2(float(availableSize[0]), float(availableSize[1])));
+    auto drawTexture = [&availableSize](GLuint texture){
+        glClear(GL_COLOR_BUFFER_BIT);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glBegin(GL_QUADS);
+        glTexCoord2f(0, 0);
+        glVertex2f(-1, -1);
+        glTexCoord2f(1, 0);
+        glVertex2f(1, -1);
+        glTexCoord2f(1, 1);
+        glVertex2f(1, 1);
+        glTexCoord2f(0, 1);
+        glVertex2f(-1, 1);
+        glEnd();
+
+        ImGui::Image(texture, ImVec2(float(availableSize[0]), float(availableSize[1])));
+
+    };
+
+    if(denoiserEnabled)
+        drawTexture(imageBufferDenoised.texture);
+    else
+        drawTexture(imageBuffer.texture);
 
     return true;
 
@@ -238,7 +239,6 @@ __host__ void Scene::denoise() {
     const char* errorMessage;
     if (oidnDevice.getError(errorMessage) != oidn::Error::None){
         std::cerr << "OIDN Error: " << errorMessage << '\n';
-        return;
     }
 
     int width = sceneRepresentation.sceneInfo.width;
@@ -257,6 +257,17 @@ __host__ void Scene::denoise() {
 //
 //    if (oidnDevice.getError(errorMessage) != oidn::Error::None)
 //        std::cerr << "Error: " << errorMessage << '\n';
+
+    int devId = 0;
+    int numSMs;
+    checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    denoiser<<<blockSize, threadSize>>>(imageBuffer.featureBuffer, denoiseOutput, denoiseWeights, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
+    checkCudaErrors(cudaDeviceSynchronize());
+    cudaHelpers::vecToSurface<<<32 * numSMs, 256>>>(imageBufferDenoised.surface, denoiseOutput, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
+    checkCudaErrors(cudaDeviceSynchronize());
 
 
     std::cout << "\rDenoising took " << ((double) (clock() - startDenoise)) / CLOCKS_PER_SEC << " seconds.\n";
@@ -289,10 +300,12 @@ __host__ void Scene::saveOutput() {
 
     extractBufferInfo<BUFFERTYPE::MEAN><<<blocksPerGrid, threadsPerBlock>>>(imageBuffer.featureBuffer->color, hostImage, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height, FunctorIdentity{});
 
-    Vec3f *hostImageDenoised;
-    checkCudaErrors(cudaMallocManaged(&hostImageDenoised, sizeof(Vec3f) * sceneRepresentation.sceneInfo.width * sceneRepresentation.sceneInfo.height));
-    extractBufferInfo<BUFFERTYPE::MEAN><<<blocksPerGrid, threadsPerBlock>>>(imageBuffer.featureBuffer->color, hostImageDenoised, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height, FunctorIdentity{});
-    checkCudaErrors(cudaDeviceSynchronize());
+//    Vec3f *hostImageDenoised;
+//    checkCudaErrors(cudaMallocManaged(&hostImageDenoised, sizeof(Vec3f) * sceneRepresentation.sceneInfo.width * sceneRepresentation.sceneInfo.height));
+//    extractBufferInfo<BUFFERTYPE::MEAN><<<blocksPerGrid, threadsPerBlock>>>(imageBufferDenoised.featureBuffer->color, hostImageDenoised, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height, FunctorIdentity{});
+//    checkCudaErrors(cudaDeviceSynchronize());
+
+    Vec3f *hostImageDenoised = denoiseOutput;
 
     const bool didHDR = stbi_write_hdr(hdrPath.c_str(), sceneRepresentation.sceneInfo.width,
                                        sceneRepresentation.sceneInfo.height, 3, (float *) hostImage);
