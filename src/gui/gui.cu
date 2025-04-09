@@ -143,10 +143,6 @@ void GUI::loop(Scene &scene) {
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
             ImGui::Text("%f / %f ms", duration * 1.0f,  100.f * duration / scene.getPercentage());
 
-            const Vector3f cameraPos = scene.getCameraPosition();
-
-            ImGui::Text("Camera Position (%f, %f, %f)", cameraPos[0], cameraPos[1], cameraPos[2]);
-
             ImGui::Text("Denoiser Enabled: %s", scene.denoiserEnabled ? "true" : "false");
 
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);

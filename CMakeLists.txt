@@ -144,6 +144,7 @@ add_executable(CustomRenderer
         src/gui/gui.cu
         src/gui/viewport.cu
         src/statistics/statistics.h
+        src/camera/camera.cu
 
 )
 

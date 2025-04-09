@@ -3,6 +3,7 @@
 //
 
 #include "denoise.h"
+#include <optional>
 
 //Denoise feature is a bit clumsy to use in current state
 //TODO add easier customizability
@@ -197,34 +198,74 @@ GPU_ONLY void denoiseGaussian(const FeatureBuffer *bufferIn, Vec3f *output, floa
     weights[pixelIndex] = 0.0f;
 }
 
+template <typename T>
+struct TemporaryStatisticUpdate{
+public:
+    CPU_GPU_CONSTEXPR TemporaryStatisticUpdate() noexcept
+        : stat(std::nullopt) {
+
+    }
+    CPU_GPU_CONSTEXPR explicit TemporaryStatisticUpdate(Statistic<T> &stat) : stat({&stat, stat}) {
+
+    }
+
+    CPU_GPU_CONSTEXPR ~TemporaryStatisticUpdate() {
+        if(stat.has_value()){
+            *(stat->stat) = stat->initialValue;
+        }
+    }
+
+    CPU_GPU_CONSTEXPR TemporaryStatisticUpdate(const TemporaryStatisticUpdate &) = delete;
+    CPU_GPU_CONSTEXPR TemporaryStatisticUpdate &operator=(const TemporaryStatisticUpdate &) = delete;
+
+    CPU_GPU_CONSTEXPR TemporaryStatisticUpdate(TemporaryStatisticUpdate&& other) noexcept
+        : stat(std::move(other.stat)) {
+        other.stat = std::nullopt;
+    }
+
+    CPU_GPU_CONSTEXPR TemporaryStatisticUpdate& operator=(TemporaryStatisticUpdate&& other) noexcept {
+        if (this != &other) {
+            stat = std::move(other.stat);
+            other.stat = std::nullopt;
+        }
+        return *this;
+    }
+
+    CPU_GPU_CONSTEXPR void manipulateMean(const T &value) {
+        if(stat.has_value()){
+            stat->stat->manipulateMean(value);
+        }
+    }
+
+
+
+private:
+    struct Binding {
+        Statistic<T> *stat;
+        Statistic<T> initialValue;
+    };
+    std::optional<Binding> stat;
+};
+
 
 __global__ void denoiser(FeatureBuffer *featureBuffer, Vec3f *output, float *weights, int width, int height) {
     int i, j, pixelIndex;
     if(!cudaHelpers::initIndices(i, j, pixelIndex, width, height)) return;
 
     removeFireflies(featureBuffer, output, weights, i, j, width, height);
-    bool hasSwapped = false;
-    auto previousState = featureBuffer->color[pixelIndex];
+    TemporaryStatisticUpdate<Vec3f> statUpdate;
+
     if(weights[pixelIndex] != 0.0){
-        featureBuffer->color[pixelIndex].manipulateMean(output[pixelIndex]);
+        statUpdate = TemporaryStatisticUpdate<Vec3f>(featureBuffer->color[pixelIndex]);
+        statUpdate.manipulateMean(output[pixelIndex]);
         weights[pixelIndex] = 0.0f;
-        hasSwapped = true;
     }
     __syncthreads();
-//    bilateralFilterWiki(input, output, i, j, width, height);
 //    bilateralFilterSlides(featureBuffer, output, weights, i, j, width, height);
     denoiseGaussian(featureBuffer, output, weights, i, j, width, height);
     __syncthreads();
     if(weights[pixelIndex] < DENOISER_EPSILON) {
-        if(hasSwapped){
-            featureBuffer->color[pixelIndex] = previousState;
-        }
         return;
     }
     output[pixelIndex] /= weights[pixelIndex];
-
-    if(hasSwapped){
-        featureBuffer->color[pixelIndex] = previousState;
-    }
-    return;
 }

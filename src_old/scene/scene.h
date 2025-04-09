@@ -54,11 +54,6 @@ public:
         cameraVelocity = vel;
     }
 
-    __host__ Vector3f getCameraPosition() const noexcept {
-        return deviceCamera.getPosition();
-    }
-
-
     __host__ ImVec2 getDimensions() const noexcept {
         return {static_cast<float>(sceneRepresentation.sceneInfo.width),
                 static_cast<float>(sceneRepresentation.sceneInfo.height)};

@@ -2,6 +2,15 @@
 
 #define EPSILON 0.0001f
 
+
+
+#define CPU_GPU __host__ __device__
+#define CPU_GPU_INLINE __host__ __device__ inline
+#define CPU_GPU_CONSTEXPR __host__ __device__ inline constexpr
+#define CPU_ONLY __host__
+#define GPU_ONLY __device__
+
+
 #include <charconv>
 #include <cmath>
 #include <cstdlib>
@@ -12,8 +21,10 @@
 
 #include <cuda_runtime.h>
 
+#include <eigen3/Eigen/Dense>
+
 namespace Warp{
-    [[nodiscard]] __host__ __device__ constexpr float gammaCorrect(float value) noexcept {
+    [[nodiscard]] CPU_GPU_CONSTEXPR float gammaCorrect(float value) noexcept {
         if(value <= 0.0031308f) return std::clamp(12.92f * value, 0.f, 1.f);
         return std::clamp(1.055f * std::pow(value, 1.f / 2.4f) - 0.055f, 0.f, 1.f);
     }
@@ -21,11 +32,16 @@ namespace Warp{
 
 class Vector3f {
 public:
-    __host__ __device__ constexpr Vector3f() noexcept : data{0.0f, 0.0f, 0.0f} {}
+    CPU_GPU_CONSTEXPR Vector3f() noexcept : data{0.0f, 0.0f, 0.0f} {}
 
-    __host__ __device__ constexpr Vector3f(float x, float y, float z) noexcept : data{x, y, z} {}
+    CPU_GPU_CONSTEXPR Vector3f(float x, float y, float z) noexcept : data{x, y, z} {}
 
-    __host__ __device__ constexpr explicit Vector3f(float v) noexcept : data{v, v, v} {}
+    CPU_GPU_CONSTEXPR explicit Vector3f(float v) noexcept : data{v, v, v} {}
+
+    //support constructor from eigen
+    CPU_GPU Vector3f(const Eigen::Vector3f &v) noexcept
+        : data{v[0], v[1], v[2]} {
+    }
 
     __host__ constexpr explicit Vector3f(const std::string_view &str) : data{0.f, 0.f, 0.f} {
 
@@ -43,6 +59,13 @@ public:
             currentString.remove_prefix(currentString.find(',') + 1);
             currentString.remove_prefix(currentString.find_first_not_of(" \r\n\t\v\f"));
         }
+    }
+
+
+
+    //support cast to eigen
+    [[nodiscard]] CPU_GPU operator Eigen::Vector3f() const noexcept {
+        return Eigen::Vector3f{data[0], data[1], data[2]};
     }
 
 

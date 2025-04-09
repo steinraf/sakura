@@ -343,7 +343,8 @@ __host__ void Scene::saveOutput() {
 }
 
 __host__ void Scene::step(float dt) noexcept {
-    deviceCamera.addVelocityRelative(cameraVelocity, dt);
+    deviceCamera.translate(cameraVelocity * dt);
+//    deviceCamera.addVelocityRelative(cameraVelocity, dt);
     std::cout << std::flush;
 }
 __host__ OpenGLSharedBuffer::OpenGLSharedBuffer(size_t width, size_t height) : width(width),
