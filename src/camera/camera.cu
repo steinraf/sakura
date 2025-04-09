@@ -79,35 +79,11 @@ __device__ Ray3f Camera::getRay(float u, float v, const Vector2f &sample) const 
 }
 
 CPU_GPU void Camera::translate(const Vec3f &x) {
-    cameraTransform.translation() += cameraTransform.linear() * static_cast<Eigen::Vector3f>(x);
-    //    Vec3f currentCenter = cameraTransform.translation();
-    //    //    Vec3f currentLookat = Vec3f{10, 1.5, -0.5};// cameraTransform.translation() + cameraTransform.linear().col(2) * focusDist;
-    //    Vec3f currentLookat = Vec3f{-0.695605, 1.607947, -0.588471};
-    //
-    //    Vec3f currentUp = Vec3f{0.0, 1.0, 0.0};//cameraTransform.linear().col(1);
-    //
-    //    Vec3f x = Vec3f::Zero();//30 * cameraTransform.linear().col(0) * 0.01;
-    //
-    //    cameraTransform = lookAt(currentCenter + x, currentLookat, currentUp);
-    //    focusDist = (currentLookat - (currentCenter + x)).norm();
-    //    float fov = 1000.0f / focusDist;
-    //    fov = 400.0f / focusDist;
-    //
-    //    k = tanf(fov * M_PIf / 360.f);
-    //    float aspectRatio = 1280.f / 720.f;
-    //
-    //    sampleToCamera.matrix() << 2 * k, 0.f, 0.f, -k,         //
-    //            0.f, -2 * k / aspectRatio, 0.f, k / aspectRatio,//
-    //            0.f, 0.f, 0.f, 1.f,                             //
-    //            0.f, 0.f, (near - far) / (near * far), 1.f / near;
-    //
-    //    printf("Current camera pos (%f %f %f)\n", cameraTransform.translation()[0], cameraTransform.translation()[1], cameraTransform.translation()[2]);
-
-    //    cameraTransform.translate(x);
+    cameraTransform.translation() += static_cast<Eigen::Vector3f>(x);
 }
 
 
-CPU_GPU void Camera::relativeTranslate(const Vec3f &x) {
+CPU_GPU void Camera::translateRelative(const Vec3f &x) {
     cameraTransform.translation() += cameraTransform.linear() * static_cast<Eigen::Vector3f>(x);
 }
 CPU_GPU Eigen::Isometry3f Camera::lookAt(const Vec3f &center, const Vec3f &lookAt, const Vec3f &up) {

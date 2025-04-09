@@ -31,12 +31,12 @@ public:
 
     CPU_GPU static Eigen::Isometry3f lookAt(const Vec3f &center, const Vec3f &lookAt, const Vec3f &up);
 
-    // Takes in screen-space coordinates u, v and sampler
+    // Takes in screen-space coordinates u, v and sample
     // returns ray originating from the camera
     __device__ Ray3f getRay(float u, float v, const Vector2f &sample) const;
 
     CPU_GPU void translate(const Vec3f &x);
-    CPU_GPU void relativeTranslate(const Vec3f &x);
+    CPU_GPU void translateRelative(const Vec3f &x);
 
     CPU_GPU void updateFOV(float fov);
     CPU_GPU void updateLensRadius(float aperture);
