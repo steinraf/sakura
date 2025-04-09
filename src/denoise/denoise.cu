@@ -216,6 +216,9 @@ __global__ void denoiser(FeatureBuffer *featureBuffer, Vec3f *output, float *wei
     denoiseGaussian(featureBuffer, output, weights, i, j, width, height);
     __syncthreads();
     if(weights[pixelIndex] < DENOISER_EPSILON) {
+        if(hasSwapped){
+            featureBuffer->color[pixelIndex] = previousState;
+        }
         return;
     }
     output[pixelIndex] /= weights[pixelIndex];
