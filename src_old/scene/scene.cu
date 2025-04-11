@@ -177,7 +177,12 @@ bool Scene::render() {
     checkCudaErrors(cudaDeviceSynchronize());
 
     if(denoiserEnabled){
+        checkCudaErrors(cudaMemset(denoiseWeights, 0, sizeof(float) * sceneRepresentation.sceneInfo.width * sceneRepresentation.sceneInfo.height));
+        checkCudaErrors(cudaMemset(denoiseOutput, 0, sizeof(Vec3f) * sceneRepresentation.sceneInfo.width * sceneRepresentation.sceneInfo.height));
+        checkCudaErrors(cudaDeviceSynchronize());
         denoiser<<<blockSize, threadSize>>>(imageBuffer.featureBuffer, denoiseOutput, denoiseWeights, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
+        checkCudaErrors(cudaDeviceSynchronize());
+        denoiseApplyWeights<<<blockSize, threadSize>>>(imageBuffer.featureBuffer, denoiseOutput, denoiseWeights, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
         checkCudaErrors(cudaDeviceSynchronize());
         cudaHelpers::vecToSurface<<<32 * numSMs, 256>>>(imageBufferDenoised.surface, denoiseOutput, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
         checkCudaErrors(cudaDeviceSynchronize());
@@ -264,7 +269,12 @@ __host__ void Scene::denoise() {
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
+    checkCudaErrors(cudaMemset(denoiseWeights, 0, sizeof(float) * sceneRepresentation.sceneInfo.width * sceneRepresentation.sceneInfo.height));
+    checkCudaErrors(cudaMemset(denoiseOutput, 0, sizeof(Vec3f) * sceneRepresentation.sceneInfo.width * sceneRepresentation.sceneInfo.height));
+    checkCudaErrors(cudaDeviceSynchronize());
     denoiser<<<blockSize, threadSize>>>(imageBuffer.featureBuffer, denoiseOutput, denoiseWeights, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
+    checkCudaErrors(cudaDeviceSynchronize());
+    denoiseApplyWeights<<<blockSize, threadSize>>>(imageBuffer.featureBuffer, denoiseOutput, denoiseWeights, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
     checkCudaErrors(cudaDeviceSynchronize());
     cudaHelpers::vecToSurface<<<32 * numSMs, 256>>>(imageBufferDenoised.surface, denoiseOutput, sceneRepresentation.sceneInfo.width, sceneRepresentation.sceneInfo.height);
     checkCudaErrors(cudaDeviceSynchronize());

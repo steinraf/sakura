@@ -8,16 +8,16 @@
 //Denoise feature is a bit clumsy to use in current state
 //TODO add easier customizability
 
-#define DENOISER_EPSILON 1e-6f
+#define DENOISER_EPSILON std::numeric_limits<float>::epsilon()
 
 GPU_ONLY void bilateralFilterSlides(FeatureBuffer *featureBuffer, Vec3f *output, float *weights, int i, int j, int width, int height){
 
 
-    //        constexpr int neighbourDiameter = 21;
-    //        constexpr int patchDiameter = 7;
+//            constexpr int neighbourDiameter = 21;
+//            constexpr int patchDiameter = 7;
 
     constexpr int neighbourDiameter = 5;
-    constexpr int patchDiameter = 2;
+    constexpr int patchDiameter = 3;
 
     constexpr float k = 0.45f;
 
@@ -30,37 +30,39 @@ GPU_ONLY void bilateralFilterSlides(FeatureBuffer *featureBuffer, Vec3f *output,
             for(int pI = max(0, pixelI - patchDiameter / 2); pI < min(width, pixelI + patchDiameter / 2 + 1); ++pI) {
                 for(int pJ = max(0, pixelJ - patchDiameter / 2); pJ < min(height, pixelJ + patchDiameter / 2 + 1); ++pJ) {
                     const int pIndex = pJ * width + pI;
-                    const Vector3f pMean = featureBuffer->color[pIndex].getMean();
-                    const Vector3f pVarianceMean = featureBuffer->color[pIndex].getSampleVariance();
+
 
                     for(int qI = max(0, pixelQI - patchDiameter / 2); qI < min(width, pixelQI + patchDiameter / 2 + 1); ++qI) {
                         for(int qJ = max(0, pixelQJ - patchDiameter / 2); qJ < min(height, pixelQJ + patchDiameter / 2 + 1); ++qJ) {
                             const int qIndex = qJ * width + qI;
-                            const Vector3f qMean = featureBuffer->color[qIndex].getMean();
-                            const Vector3f qVarianceMean = featureBuffer->color[qIndex].getSampleVariance();
 
-                            for(int col = 0; col < 3; ++col) {
-                                meanDist += (powf(pMean[col] - qMean[col], 2) - (pVarianceMean[col] + min(qVarianceMean[col], pVarianceMean[col]))) / (EPSILON + k * k * (pVarianceMean[col] + qVarianceMean[col]));
-                            }
+                            auto computeFeature = [&qIndex, &pIndex](Statistic<Vec3f> *stat) -> float {
+                                const Vector3f qMean = stat[qIndex].getMean();
+                                const Vector3f pMean = stat[pIndex].getMean();
+                                const Vector3f qVariance = stat[qIndex].getSampleMeanVariance();
+                                const Vector3f pVariance = stat[pIndex].getSampleMeanVariance();
 
-//                            Vector3f minVec{
-//                                    min(qVarianceMean[0], pVarianceMean[0]),
-//                                    min(qVarianceMean[1], pVarianceMean[1]),
-//                                    min(qVarianceMean[2], pVarianceMean[2]),
-//                            };
-//                            meanDist += ((input[pIndex] - input[qIndex])*(input[pIndex] - input[qIndex]) - (pVarianceMean + minVec) / (Vector3f{EPSILON} + k * k * (pVarianceMean + qVarianceMean))).norm();
+                                float weight_p = 0.f;
+                                for(int col = 0; col < 3; ++col) {
+                                    weight_p += (powf(pMean[col] - qMean[col], 2) - (pVariance[col] + min(qVariance[col], pVariance[col])))
+                                                / (EPSILON + k * k * (pVariance[col] + qVariance[col]));
+                                }
+                                return weight_p;
+                                //meanDist .= ((input[pI] - input[qI])^2 - (var[pI] + min(var[pI], var[qI])
+                                //            --------------------------------------------------------
+                                //              (EPSILON + k^2 * (var[pI] + var[qI]))
+                            };
 
-                            //meanDist .= ((input[pI] - input[qI])^2 - (var[pI] + min(var[pI], var[qI])
-                            //            --------------------------------------------------------
-                            //              (EPSILON + k^2 * (var[pI] + var[qI]))
+                            meanDist += computeFeature(featureBuffer->color);
+
                         }
                     }
                 }
             }
 
-//            printf("Mean distance is %f\n", meanDist/(3 * patchDiameter * patchDiameter));
             float w = expf(-max(0.f, meanDist/(3 * patchDiameter * patchDiameter)));
-            if(w < DENOISER_EPSILON) w = DENOISER_EPSILON;
+
+            if(w == 0) continue;
 
             for(int pI = max(0, pixelI - patchDiameter / 2); pI < min(width, pixelI + patchDiameter / 2 + 1); ++pI) {
                 for(int pJ = max(0, pixelJ - patchDiameter / 2); pJ < min(height, pixelJ + patchDiameter / 2 + 1); ++pJ) {
@@ -71,13 +73,14 @@ GPU_ONLY void bilateralFilterSlides(FeatureBuffer *featureBuffer, Vec3f *output,
                         for(int qJ = max(0, pixelQJ - patchDiameter / 2); qJ < min(height, pixelQJ + patchDiameter / 2 + 1); ++qJ) {
 
                             const int qIndex = qJ * width + qI;
-                            atomicAdd(weights + pIndex, w);
                             auto add = []__device__(Vector3f *address, const Vector3f &vec){
                                 Vector3f &v = *address;
                                 atomicAdd(&(v[0]), vec[0]);
                                 atomicAdd(&(v[1]), vec[1]);
                                 atomicAdd(&(v[2]), vec[2]);
                             };
+
+                            atomicAdd(weights + pIndex, w);
                             add(output + pIndex, w * featureBuffer->color[qIndex].getMean());
                         }
                     }
@@ -252,19 +255,34 @@ __global__ void denoiser(FeatureBuffer *featureBuffer, Vec3f *output, float *wei
     int i, j, pixelIndex;
     if(!cudaHelpers::initIndices(i, j, pixelIndex, width, height)) return;
 
-    removeFireflies(featureBuffer, output, weights, i, j, width, height);
-    TemporaryStatisticUpdate<Vec3f> statUpdate;
+//    removeFireflies(featureBuffer, output, weights, i, j, width, height);
+//    TemporaryStatisticUpdate<Vec3f> statUpdate;
+//
+//    if(weights[pixelIndex] != 0.0){
+//        statUpdate = TemporaryStatisticUpdate<Vec3f>(featureBuffer->color[pixelIndex]);
+//        statUpdate.manipulateMean(output[pixelIndex]);
+//        weights[pixelIndex] = 0.0f;
+//    }
+//    __syncthreads();
+//    denoiseGaussian(featureBuffer, output, weights, i, j, width, height);
+    bilateralFilterSlides(featureBuffer, output, weights, i, j, width, height);
 
-    if(weights[pixelIndex] != 0.0){
-        statUpdate = TemporaryStatisticUpdate<Vec3f>(featureBuffer->color[pixelIndex]);
-        statUpdate.manipulateMean(output[pixelIndex]);
-        weights[pixelIndex] = 0.0f;
-    }
-    __syncthreads();
-//    bilateralFilterSlides(featureBuffer, output, weights, i, j, width, height);
-    denoiseGaussian(featureBuffer, output, weights, i, j, width, height);
-    __syncthreads();
+//    output[pixelIndex] = featureBuffer->color[pixelIndex].getMean();
+
+
+}
+
+__global__ void denoiseApplyWeights(FeatureBuffer *featureBuffer, Vec3f *output, float *weights, int width, int height) {
+    int i, j, pixelIndex;
+    if(!cudaHelpers::initIndices(i, j, pixelIndex, width, height)) return;
+
+
     if(weights[pixelIndex] < DENOISER_EPSILON) {
+#ifndef NDEBUG
+        output[pixelIndex] = Vector3f{0.f, 0.f, 1.f};
+#else
+        output[pixelIndex] = featureBuffer->color[pixelIndex].getMean();
+#endif
         return;
     }
     output[pixelIndex] /= weights[pixelIndex];

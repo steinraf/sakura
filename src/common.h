@@ -78,6 +78,9 @@ public:
         }
         return variance / (numElements - 1);
     }
+    [[nodiscard]] CPU_GPU T getSampleMeanVariance() const {
+        return getSampleVariance() / numElements;
+    }
 
     [[nodiscard]] CPU_GPU size_t getNumElements() const {
         return numElements;

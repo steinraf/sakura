@@ -9,3 +9,5 @@
 
 
 __global__ void denoiser(FeatureBuffer *featureBuffer, Vector3f *output, float *weights, int width, int height);
+
+__global__ void denoiseApplyWeights(FeatureBuffer *featureBuffer, Vec3f *output, float *weights, int width, int height);

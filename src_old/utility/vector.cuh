@@ -140,6 +140,10 @@ public:
         return {0.f, 0.f, 0.f};
     }
 
+    [[nodiscard]] __host__ __device__ constexpr static inline Vector3f Ones() noexcept {
+        return {1.f, 1.f, 1.f};
+    }
+
 
 //    __device__ static inline void atomicCudaAdd(Vector3f *address, const Vector3f &vec) noexcept {
 //        Vector3f &v = *address;

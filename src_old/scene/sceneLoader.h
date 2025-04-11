@@ -132,6 +132,7 @@ struct SceneRepresentation {
                     cameraInfo.origin = getVector3f(lookAt, "origin", "\t\t\t");
                     cameraInfo.up = getVector3f(lookAt, "up", "\t\t\t");
                 } else {
+
                     throw std::runtime_error("Sensor Transform must contain lookAt.");
                 }
 
@@ -160,9 +161,9 @@ struct SceneRepresentation {
 
                 for(const auto &filmChild: child.children()) {
                     const std::string &filmChildName = filmChild.name();
-                    if(filmChildName == "rfilter") {
-                        std::cerr << "WARNING, IGNORING FILTERS\n";
-                    } else if(filmChildName == "integer") {
+                    if(filmChildName == "rfilter" || filmChildName == "string") {
+                        std::cerr << "WARNING, IGNORING FILTERS " + filmChildName + '\n';
+                    }  else if(filmChildName == "integer") {
                         if(getString(filmChild.attribute("name")) == "width") {
                             sceneInfo.width = std::stoi(getString(filmChild.attribute("value")));
                             std::cout << "\t\t\t"
@@ -253,6 +254,7 @@ struct SceneRepresentation {
         } else {
             throw std::runtime_error("Invalid Material \"" + getString(node.attribute("type")) + "\".");
         }
+
     }
 
     void inline addNormalMap(const std::string &name, bool isEmitter = false) {
@@ -413,13 +415,12 @@ struct SceneRepresentation {
 
     struct CameraInfo {
         CameraInfo()
-            : target(0.f, 0.f, -1.f),
-              origin(0.f), up(0.f, 1.f, 0.f),
+            : target(0.f, 0.f, -1.f), origin(0.f), up(0.f, 1.f, 0.f),
               fov(30), aperture(0.f), focusDist(1.f),
               k1(0.f), k2(0.f), apertureType(ApertureType::Circular) {
         }
 
-        Vector3f target, origin, up;
+        Vec3f target, origin, up;
         float fov, aperture, focusDist;
         float k1, k2;
         ApertureType apertureType;
