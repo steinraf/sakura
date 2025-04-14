@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../common.h"
+#include "../statistics/statistics.h"
 
 enum class BUFFERTYPE {
     MEAN,

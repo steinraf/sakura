@@ -98,9 +98,6 @@ CPU_GPU void Camera::rotateRelative(const Vec3f &x) {
     cameraTransform = lookAt(Vec3f{cameraTransform.translation()},
                             Vec3f{cameraTransform.translation() + cameraTransform.linear().col(2)},
                             Vec3f::UnitY());
-
-
-
 }
 CPU_GPU Eigen::Isometry3f Camera::lookAt(const Vec3f &center, const Vec3f &lookAt, const Vec3f &up) {
     Vec3f f = (lookAt - center).normalized();

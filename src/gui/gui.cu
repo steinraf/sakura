@@ -9,7 +9,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"
-#include "viewport.h"
+#include "viewport.cuh"
 
 #include <GL/glew.h>
 #include <thread>
@@ -20,7 +20,7 @@ static void glfw_error_callback(int error, const char* description){
     fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-GUI::GUI(const GUIConfig &config) {
+GUI::GUI(const GUIConfig &config) : config(config), viewports() {
     glfwSetErrorCallback(glfw_error_callback);
 
     if(!glfwInit()) {
@@ -78,6 +78,8 @@ GUI::GUI(const GUIConfig &config) {
         exit(1);
     }
 }
+
+
 CPU_ONLY void GUI::loop(Scene &scene) {
     auto start = std::chrono::high_resolution_clock::now();
     while (!glfwWindowShouldClose(window)){
@@ -95,11 +97,13 @@ CPU_ONLY void GUI::loop(Scene &scene) {
         static ImGuiDockNodeFlags dockspaceFlags = ImGuiDockNodeFlags_PassthruCentralNode;
         static ImGuiWindowFlags windowFlags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoDecoration;
 
-        static std::unique_ptr<Viewport> renderer_viewport = std::make_unique<OpenGLViewport>(scene, scene.getDimensions().x, scene.getDimensions().y, "Sakura Main" );;
 
+        // Weak ptr because we want to destroy opengl context in GUI::~GUI()
+        static std::weak_ptr<Viewport> current_viewport = viewports.begin()->second;
 
 
         const std::string debugTitle = "Debug Info";
+        const std::string mainWindowTitle = "Main Window";
 
         {
             ImGui::Begin("DockSpace", nullptr, windowFlags);
@@ -119,13 +123,11 @@ CPU_ONLY void GUI::loop(Scene &scene) {
 
                 ImGui::DockBuilderSplitNode(dockspaceId, ImGuiDir_Left, 0.2f, &dbg, &output);
                 ImGui::DockBuilderDockWindow(debugTitle.c_str(), dbg);
-                ImGui::DockBuilderDockWindow(renderer_viewport->getTitle().c_str(), output);
+                ImGui::DockBuilderDockWindow(mainWindowTitle.c_str(), output);
 
                 ImGui::DockBuilderFinish(dockspaceId);
                 return true;
             }();
-
-
 
 
             ImGui::End();
@@ -137,10 +139,19 @@ CPU_ONLY void GUI::loop(Scene &scene) {
 
             ImGui::Begin(debugTitle.c_str());
 
-            ImGui::Text("Progress: %f percent", scene.getPercentage());
+//            ImGui::Text("Progress: %f percent", scene.getPercentage());
             auto now = std::chrono::high_resolution_clock ::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
-            ImGui::Text("%f / %f ms", duration * 1.0f,  100.f * duration / scene.getPercentage());
+//            ImGui::Text("%f / %f ms", duration * 1.0f,  100.f * duration / scene.getPercentage());
+
+            if(ImGui::BeginCombo("Viewport", current_viewport.lock()->getTitle().c_str(), 0)) {
+                for(auto &[name, vp] : viewports) {
+                    if(ImGui::Selectable(name.c_str(), current_viewport.lock()->getTitle() == name)) {
+                        current_viewport = vp;
+                    }
+                }
+                ImGui::EndCombo();
+            }
 
             ImGui::Text("Denoiser Enabled: %s", scene.denoiserEnabled ? "true" : "false");
 
@@ -149,68 +160,25 @@ CPU_ONLY void GUI::loop(Scene &scene) {
         }
 
         {
-            ImGui::Begin(renderer_viewport->getTitle().c_str(), nullptr, ImGuiWindowFlags_NoDecoration);
+            ImGui::Begin(mainWindowTitle.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);
 
-            static ImVec2 previousMousePos = ImGui::GetMousePos();
-
-            renderer_viewport->renderFrame();
-
-            Vector3f vCamera{0.f}, rotCamera{0.f};
-            float linearSpeed = 1.f, angularSpeed = 0.2f;
-
-
-            if(ImGui::IsKeyDown(ImGuiKey_W))
-                vCamera[2] += 1.f;
-            if(ImGui::IsKeyDown(ImGuiKey_S))
-                vCamera[2] -= 1.f;
-
-            if(ImGui::IsKeyDown(ImGuiKey_D))
-                vCamera[0] += 1.f;
-            if(ImGui::IsKeyDown(ImGuiKey_A))
-                vCamera[0] -= 1.f;
-
-            if(ImGui::IsKeyDown(ImGuiKey_UpArrow))
-                rotCamera[0] += 1.f;
-            if(ImGui::IsKeyDown(ImGuiKey_DownArrow))
-                rotCamera[0] -= 1.f;
-            if(ImGui::IsKeyDown(ImGuiKey_LeftArrow))
-                rotCamera[1] += 1.f;
-            if(ImGui::IsKeyDown(ImGuiKey_RightArrow))
-                rotCamera[1] -= 1.f;
-
-            if(ImGui::IsKeyDown(ImGuiKey_Space))
-                vCamera[1] += 1.f;
-            if(ImGui::IsKeyDown(ImGuiKey_LeftShift))
-                vCamera[1] -= 1.f;
-
-            ImVec2 mouseDelta = ImVec2{ImGui::GetMousePos().x - previousMousePos.x,
-                                       ImGui::GetMousePos().y - previousMousePos.y};
-
-            if(ImGui::IsWindowHovered() and ImGui::IsMouseDown(ImGuiMouseButton_Left)){
-                rotCamera += Vec3f{mouseDelta.y, mouseDelta.x, 0.f} * M_1_PI * 0.1f;
-            }
-
-            if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl)){
-                angularSpeed *= 0.1f;
-                linearSpeed *= 0.1f;
-            }
-
-            if(ImGui::IsKeyDown(ImGuiKey_R))
-                scene.reset();
-
-            if(ImGui::IsKeyDown(ImGuiKey_MouseRight))
+            if(ImGui::IsKeyDown(ImGuiKey_MouseRight)){
                 scene.denoiserEnabled = true;
-            else
+                current_viewport = viewports["Sakura Denoiser"];
+            } else {
                 scene.denoiserEnabled = false;
+                current_viewport = viewports["Sakura Raw Output"];
+            }
 
-            scene.setCameraVelocity(vCamera * linearSpeed);
-            scene.setCameraRotation(rotCamera * angularSpeed);
 
-            if((vCamera.squaredNorm() != 0.f or rotCamera.squaredNorm() != 0.f) and not ImGui::IsKeyDown(ImGuiKey_R))
-                scene.reset();
-            //            scene.denoise();
+            current_viewport.lock()->handleInput();
 
-            previousMousePos = ImGui::GetMousePos();
+            current_viewport.lock()->renderFrame();
+            current_viewport.lock()->drawTexture();
+
+
+
+
 
             ImGui::End();
         }
@@ -236,17 +204,29 @@ CPU_ONLY void GUI::loop(Scene &scene) {
 
         glfwSwapBuffers(window);
 
-        if(renderer_viewport->isDone()){
+        if(current_viewport.lock()->isDone()){
             glfwSetWindowShouldClose(window, true);
-            renderer_viewport->save();
+            for(const auto &[name, vp] : viewports){
+                vp->save();
+            }
         }
     }
 }
 GUI::~GUI() {
+    //Make sure that the viewports are destroyed before the opengl context is destroyed
+    for(auto &[name, vp] : viewports){
+        vp.reset();
+    }
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
     glfwDestroyWindow(window);
     glfwTerminate();
+}
+__host__ void GUI::setViewports(const std::vector<std::shared_ptr<Viewport>> &vps) {
+    for(auto &vp : vps){
+        viewports[vp->getTitle()] = vp;
+    }
 }

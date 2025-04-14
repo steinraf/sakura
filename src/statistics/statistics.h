@@ -16,21 +16,26 @@ template<StatType T>
 class Statistic {
 public:
     CPU_GPU Statistic() : numElements(0), mean(getZero()), variance(getZero()) {}
-    CPU_GPU Statistic(const Statistic<T> &other) = default;
-    CPU_GPU Statistic(Statistic<T> &&other) = default;
-    CPU_GPU Statistic &operator=(const Statistic<T> &other) = default;
-    CPU_GPU ~Statistic() = default;
+    Statistic(const Statistic<T> &other) = default;
+    Statistic(Statistic<T> &&other) = default;
+    Statistic &operator=(const Statistic<T> &other) = default;
+    ~Statistic() = default;
 
     // Welford's online algorithm to incrementally calculate variance
     CPU_GPU void addElement(T element) {
+        if constexpr (std::is_same_v<T, Vec3f>) {
+            if(!isfinite(element[0]) || !isfinite(element[1]) || !isfinite(element[2])) {
+                return;
+            }
+        } else {
+            if(!isfinite(element)) {
+                return;
+            }
+        }
         numElements++;
         T delta = element - mean;
         mean += delta / numElements;
-        if constexpr(std::is_same_v<T, Vec3f>) {
-            variance += delta.cwiseProduct(element - mean);
-        } else {
-            variance += delta * (element - mean);
-        }
+        variance += delta * (element - mean);
     }
 
     [[nodiscard]] CPU_GPU T getMean() const {
@@ -50,9 +55,23 @@ public:
         }
         return variance / (numElements - 1);
     }
+    [[nodiscard]] CPU_GPU T getSampleMeanVariance() const {
+        return getSampleVariance() / numElements;
+    }
 
     [[nodiscard]] CPU_GPU size_t getNumElements() const {
         return numElements;
+    }
+
+    CPU_GPU void manipulate(float scale) const {
+        mean *= scale;
+        variance *= scale * scale;
+    }
+
+    CPU_GPU void manipulateMean(T newMean) {
+        T delta = newMean - mean;
+        mean = newMean;
+        variance += delta * delta * numElements;
     }
 
     CPU_GPU void clear() {
@@ -78,3 +97,4 @@ private:
     T mean;
     T variance;
 };
+

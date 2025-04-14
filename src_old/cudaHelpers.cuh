@@ -321,7 +321,7 @@ namespace cudaHelpers {
 //        }
 //    }
 
-    CPU_GPU_CONSTEXPR Color3f PathMISEnv(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler,
+    CPU_GPU_CONSTEXPR Color3f PathMISEnv(const Ray3f &ray, const TLAS *scene, int maxRayDepth, Sampler &sampler,
                                          FeatureBuffer *featureBuffer, size_t fbIndex) noexcept {
         Intersection its;
 
@@ -528,7 +528,7 @@ namespace cudaHelpers {
     }
 
 
-    CPU_GPU_CONSTEXPR Color3f getColor(const Ray3f &ray, TLAS *scene, int maxRayDepth, Sampler &sampler,
+    CPU_GPU_CONSTEXPR Color3f getColor(const Ray3f &ray, const TLAS *scene, int maxRayDepth, Sampler &sampler,
                                           FeatureBuffer *featureBuffer, size_t fbIndex) noexcept {
 
 
@@ -564,7 +564,7 @@ namespace cudaHelpers {
     __global__ void applyGaussian(Vector3f *input, Vector3f *output, int width, int height, float sigma=0.1, int windowRadius=3);
 
 
-    __global__ void render(Camera cam, TLAS *tlas, int width, int height, int numSubsamples,
+    __global__ void render(Camera cam, const TLAS *tlas, int width, int height, int numSubsamples,
            int maxRayDepth, curandState *globalRandState, FeatureBuffer *featureBuffer);
 
     __global__ void bufferToSurface(cudaSurfaceObject_t surface, FeatureBuffer *buffer, unsigned int width, unsigned int height);

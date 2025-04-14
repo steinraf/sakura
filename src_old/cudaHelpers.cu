@@ -280,7 +280,7 @@ namespace cudaHelpers {
     }
 
 
-    __global__ void render(Camera cam, TLAS *tlas, int width, int height, int numSubsamples,
+    __global__ void render(Camera cam, const TLAS *tlas, int width, int height, int numSubsamples,
                            int maxRayDepth, curandState *globalRandState, FeatureBuffer *featureBuffer) {
         int i, j, pixelIndex;
         if(!initIndices(i, j, pixelIndex, width, height)) return;
