@@ -30,8 +30,6 @@ int main(int argc, char **argv){
     });
     auto scene = Scene{SceneRepresentation(filePath)};
 
-    bool needsRender = true;
-
 
     gui.loop(scene);
 

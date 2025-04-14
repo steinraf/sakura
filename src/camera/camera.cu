@@ -86,6 +86,22 @@ CPU_GPU void Camera::translate(const Vec3f &x) {
 CPU_GPU void Camera::translateRelative(const Vec3f &x) {
     cameraTransform.translation() += cameraTransform.linear() * static_cast<Eigen::Vector3f>(x);
 }
+CPU_GPU void Camera::rotateRelative(const Vec3f &x) {
+    float angle = x.norm();
+    if(angle < 1e-6f) {
+        return;
+    }
+    Eigen::Vector3f axis = x / angle;
+    cameraTransform.linear() = Eigen::AngleAxisf(angle, axis) * cameraTransform.linear();
+    // no roll in rotation
+    auto pos = cameraTransform.translation();
+    cameraTransform = lookAt(Vec3f{cameraTransform.translation()},
+                            Vec3f{cameraTransform.translation() + cameraTransform.linear().col(2)},
+                            Vec3f::UnitY());
+
+
+
+}
 CPU_GPU Eigen::Isometry3f Camera::lookAt(const Vec3f &center, const Vec3f &lookAt, const Vec3f &up) {
     Vec3f f = (lookAt - center).normalized();
     Vec3f r = up.cross(-f).normalized();

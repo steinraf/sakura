@@ -354,6 +354,7 @@ __host__ void Scene::saveOutput() {
 
 __host__ void Scene::step(float dt) noexcept {
     deviceCamera.translateRelative(cameraVelocity * dt);
+    deviceCamera.rotateRelative(cameraRotation * dt);
 //    deviceCamera.addVelocityRelative(cameraVelocity, dt);
     std::cout << std::flush;
 }

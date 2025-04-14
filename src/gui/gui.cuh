@@ -19,7 +19,7 @@ public:
     explicit GUI(const GUIConfig &config);
     ~GUI();
 
-    void loop(Scene& scene);
+    CPU_ONLY void loop(Scene& scene);
 
 
 

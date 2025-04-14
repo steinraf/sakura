@@ -144,6 +144,10 @@ public:
         return {1.f, 1.f, 1.f};
     }
 
+    [[nodiscard]] CPU_GPU_CONSTEXPR static Vector3f UnitX() noexcept { return {1.0f, 0.0f, 0.0f};}
+    [[nodiscard]] CPU_GPU_CONSTEXPR static Vector3f UnitY() noexcept { return {0.0f, 1.0f, 0.0f};}
+    [[nodiscard]] CPU_GPU_CONSTEXPR static Vector3f UnitZ() noexcept { return {0.0f, 0.0f, 1.0f};}
+
 
 //    __device__ static inline void atomicCudaAdd(Vector3f *address, const Vector3f &vec) noexcept {
 //        Vector3f &v = *address;

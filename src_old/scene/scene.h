@@ -54,6 +54,10 @@ public:
         cameraVelocity = vel;
     }
 
+    __host__ void setCameraRotation(const Vector3f &rot) noexcept {
+        cameraRotation = rot;
+    }
+
     __host__ ImVec2 getDimensions() const noexcept {
         return {static_cast<float>(sceneRepresentation.sceneInfo.width),
                 static_cast<float>(sceneRepresentation.sceneInfo.height)};
@@ -96,7 +100,7 @@ private:
 
     Camera deviceCamera;
 
-    Vector3f cameraVelocity{0.f};
+    Vector3f cameraVelocity{0.f}, cameraRotation{0.f};
 
 
     TLAS *meshAccelerationStructure{};

@@ -9,7 +9,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"
-#include "viewport.cuh"
+#include "viewport.h"
 
 #include <GL/glew.h>
 #include <thread>
@@ -78,8 +78,7 @@ GUI::GUI(const GUIConfig &config) {
         exit(1);
     }
 }
-void GUI::loop(Scene &scene) {
-    bool needsRender = true;
+CPU_ONLY void GUI::loop(Scene &scene) {
     auto start = std::chrono::high_resolution_clock::now();
     while (!glfwWindowShouldClose(window)){
 
@@ -152,12 +151,12 @@ void GUI::loop(Scene &scene) {
         {
             ImGui::Begin(renderer_viewport->getTitle().c_str(), nullptr, ImGuiWindowFlags_NoDecoration);
 
-            if(needsRender){
-                renderer_viewport->renderFrame();
+            static ImVec2 previousMousePos = ImGui::GetMousePos();
 
-            }
+            renderer_viewport->renderFrame();
 
-            Vector3f vCamera{0.f};
+            Vector3f vCamera{0.f}, rotCamera{0.f};
+            float linearSpeed = 1.f, angularSpeed = 0.2f;
 
 
             if(ImGui::IsKeyDown(ImGuiKey_W))
@@ -170,27 +169,48 @@ void GUI::loop(Scene &scene) {
             if(ImGui::IsKeyDown(ImGuiKey_A))
                 vCamera[0] -= 1.f;
 
+            if(ImGui::IsKeyDown(ImGuiKey_UpArrow))
+                rotCamera[0] += 1.f;
+            if(ImGui::IsKeyDown(ImGuiKey_DownArrow))
+                rotCamera[0] -= 1.f;
+            if(ImGui::IsKeyDown(ImGuiKey_LeftArrow))
+                rotCamera[1] += 1.f;
+            if(ImGui::IsKeyDown(ImGuiKey_RightArrow))
+                rotCamera[1] -= 1.f;
+
             if(ImGui::IsKeyDown(ImGuiKey_Space))
                 vCamera[1] += 1.f;
             if(ImGui::IsKeyDown(ImGuiKey_LeftShift))
                 vCamera[1] -= 1.f;
 
-            if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl))
-                vCamera *= 0.1f;
+            ImVec2 mouseDelta = ImVec2{ImGui::GetMousePos().x - previousMousePos.x,
+                                       ImGui::GetMousePos().y - previousMousePos.y};
+
+            if(ImGui::IsWindowHovered() and ImGui::IsMouseDown(ImGuiMouseButton_Left)){
+                rotCamera += Vec3f{mouseDelta.y, mouseDelta.x, 0.f} * M_1_PI * 0.1f;
+            }
+
+            if(ImGui::IsKeyDown(ImGuiKey_LeftCtrl)){
+                angularSpeed *= 0.1f;
+                linearSpeed *= 0.1f;
+            }
 
             if(ImGui::IsKeyDown(ImGuiKey_R))
                 scene.reset();
 
-            if(ImGui::IsKeyDown(ImGuiKey_MouseLeft))
+            if(ImGui::IsKeyDown(ImGuiKey_MouseRight))
                 scene.denoiserEnabled = true;
             else
                 scene.denoiserEnabled = false;
 
-            scene.setCameraVelocity(vCamera);
+            scene.setCameraVelocity(vCamera * linearSpeed);
+            scene.setCameraRotation(rotCamera * angularSpeed);
 
-            if(vCamera.squaredNorm() != 0.f and not ImGui::IsKeyDown(ImGuiKey_R))
+            if((vCamera.squaredNorm() != 0.f or rotCamera.squaredNorm() != 0.f) and not ImGui::IsKeyDown(ImGuiKey_R))
                 scene.reset();
             //            scene.denoise();
+
+            previousMousePos = ImGui::GetMousePos();
 
             ImGui::End();
         }

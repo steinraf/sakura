@@ -38,6 +38,8 @@ public:
     CPU_GPU void translate(const Vec3f &x);
     CPU_GPU void translateRelative(const Vec3f &x);
 
+    CPU_GPU void rotateRelative(const Vec3f &x);
+
     CPU_GPU void updateFOV(float fov);
     CPU_GPU void updateLensRadius(float aperture);
 
