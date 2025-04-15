@@ -27,10 +27,6 @@ int main(int argc, char **argv){
 
     auto scene = Scene{SceneRepresentation(filePath)};
 
-//    Camera camera;
-//    int spp;
-//    int maxRayDepth;
-//    curandState *curandState;
 
     GUI gui(GUIConfig{
             "Sakura",
@@ -47,10 +43,56 @@ int main(int argc, char **argv){
                                                                   int(scene.getDimensions().y)},
                                                           "Sakura Raw Output");
 
+        auto identityF = []__device__ (const Vec3f &v) { return v; };
+        auto absoluteValueF = []__device__ (const Vec3f &v) { return v.absValues(); };
+        auto unboundedF = []__device__ (const Vec3f &v) {
+            auto tf = [] __device__(float f) {
+            return 0.5f * (1.0f + std::tanh(f));
+            };
+
+            return Vec3f{
+                tf(v[0]),
+                tf(v[1]),
+                tf(v[2]),
+            };
+        };
+
+        auto unboundedPositiveF = []__device__ (const Vec3f &v) {
+            auto tf = [] __device__(float f) {
+                return std::tanh(f);
+            };
+            return Vec3f{
+                tf(v[0]),
+                tf(v[1]),
+                tf(v[2]),
+            };
+        };
+
         gui.setViewports({rawOutput,
                           std::make_shared<Denoiser>(
                                   rawOutput,
-                                  "Sakura Denoiser")});
+                                  "Sakura Denoiser"),
+                          std::make_shared<BufferVisualizer<BUFFERTYPE::MEAN, decltype(absoluteValueF)>>(
+                                                     rawOutput,
+                                                     rawOutput->getFeatureBuffer()->normal,
+                                                        "Sakura Normal Buffer",
+                                  absoluteValueF),
+                          std::make_shared<BufferVisualizer<BUFFERTYPE::MEAN, decltype(unboundedF)>>(
+                                  rawOutput,
+                                  rawOutput->getFeatureBuffer()->position,
+                                  "Sakura Position Buffer",
+                                  unboundedF),
+                          std::make_shared<BufferVisualizer<BUFFERTYPE::MEAN, decltype(unboundedPositiveF)>>(
+                                  rawOutput,
+                                  rawOutput->getFeatureBuffer()->albedo,
+                                  "Sakura Albedo Buffer",
+                                  unboundedPositiveF),
+                          std::make_shared<BufferVisualizer<BUFFERTYPE::MEAN, decltype(identityF)>>(
+                                  rawOutput,
+                                  rawOutput->getFeatureBuffer()->uv,
+                                  "Sakura UV Buffer",
+                                  identityF)
+                         });
     }
 
 

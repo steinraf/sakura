@@ -13,7 +13,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-__host__ OpenGLViewport::OpenGLSharedBuffer::OpenGLSharedBuffer(size_t width, size_t height) : width(width),
+__host__ OpenGLSharedBuffer::OpenGLSharedBuffer(size_t width, size_t height) : width(width),
                                                                                height(height) {
 
     checkCudaErrors(cudaMallocManaged(
@@ -65,7 +65,7 @@ __host__ OpenGLViewport::OpenGLSharedBuffer::OpenGLSharedBuffer(size_t width, si
 
 
 }
-__host__ OpenGLViewport::OpenGLSharedBuffer::~OpenGLSharedBuffer() {
+__host__ OpenGLSharedBuffer::~OpenGLSharedBuffer() {
 
     checkCudaErrors(cudaDestroySurfaceObject(surface));
     checkCudaErrors(cudaGraphicsUnmapResources(1, &resource, nullptr));
@@ -108,8 +108,7 @@ void OpenGLViewport::render() {
         checkCudaErrors(cudaGetLastError());
         checkCudaErrors(cudaDeviceSynchronize());
 
-        cudaHelpers::bufferToSurface<<<32 * numSMs, 256>>>(imageBuffer.surface, imageBuffer.featureBuffer, imageBuffer.width, imageBuffer.height);
-        checkCudaErrors(cudaDeviceSynchronize());
+
 
         actualSamples += 1;
 
@@ -150,7 +149,7 @@ void OpenGLViewport::save() {
 
     extractBufferInfo<BUFFERTYPE::MEAN><<<blocksPerGrid, threadsPerBlock>>>(imageBuffer.featureBuffer->color, hostImage, imageBuffer.width, imageBuffer.height, FunctorIdentity{});
 
-    const bool didHDR = stbi_write_hdr(hdrPath.c_str(), imageBuffer.width,
+    [[maybe_unused]] const bool didHDR = stbi_write_hdr(hdrPath.c_str(), imageBuffer.width,
                                        imageBuffer.height, 3, (float *) hostImage);
     assert(didHDR);
 
@@ -175,6 +174,14 @@ void OpenGLViewport::clear() {
     imageBuffer.featureBuffer->clear();
 }
 void OpenGLViewport::drawTexture() {
+    int numSMs;
+    int devId = 0;
+
+    checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
+    checkCudaErrors(cudaDeviceSynchronize());
+    cudaHelpers::bufferToSurface<<<32 * numSMs, 256>>>(imageBuffer.surface, imageBuffer.featureBuffer, imageBuffer.width, imageBuffer.height);
+    checkCudaErrors(cudaDeviceSynchronize());
+
     const auto availableSize = ImVec2{
             ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x,
             ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y,
@@ -253,6 +260,9 @@ void OpenGLViewport::handleInput() {
 
     previousMousePos = ImGui::GetMousePos();
 }
+const FeatureBuffer *OpenGLViewport::getFeatureBuffer() const {
+    return imageBuffer.featureBuffer;
+}
 Denoiser::Denoiser(std::shared_ptr<OpenGLViewport> _viewport, std::string title)
     : viewport(std::move(_viewport)), title(std::move(title)), denoiseWeights(nullptr), denoiseOutput(nullptr) {
 
@@ -312,7 +322,6 @@ void Denoiser::save() {
 
 }
 void Denoiser::render() {
-    std::cout << "DENOISING\n";
     viewport->render();
     denoise();
 }
@@ -324,6 +333,13 @@ Denoiser::~Denoiser() {
     checkCudaErrors(cudaFree(denoiseOutput));
 }
 void Denoiser::drawTexture() {
+    int numSMs;
+    int devId = 0;
+    checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
+    checkCudaErrors(cudaDeviceSynchronize());
+    cudaHelpers::vecToSurface<<<32 * numSMs, 256>>>(viewport->imageBuffer.surface, denoiseOutput, viewport->imageBuffer.width, viewport->imageBuffer.height);
+    checkCudaErrors(cudaDeviceSynchronize());
+
     const auto availableSize = ImVec2{
             ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x,
             ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y,
@@ -354,10 +370,7 @@ void Denoiser::denoise() {
     }
     checkCudaErrors(cudaMemset(denoiseWeights, 0, sizeof(float) * viewport->imageBuffer.width * viewport->imageBuffer.height));
     checkCudaErrors(cudaMemset(denoiseOutput, 0, sizeof(Vec3f) * viewport->imageBuffer.width * viewport->imageBuffer.height));
-    int devId = 0;
-    int numSMs;
-    checkCudaErrors(cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, devId));
-    checkCudaErrors(cudaDeviceSynchronize());
+
 
     const unsigned int blockSizeX = 4, blockSizeY = 4;
     const dim3 threadSize{blockSizeX, blockSizeY};
@@ -368,8 +381,7 @@ void Denoiser::denoise() {
     checkCudaErrors(cudaDeviceSynchronize());
     denoiseApplyWeights<<<blockSize, threadSize>>>(viewport->imageBuffer.featureBuffer, denoiseOutput, denoiseWeights, viewport->imageBuffer.width, viewport->imageBuffer.height);
     checkCudaErrors(cudaDeviceSynchronize());
-    cudaHelpers::vecToSurface<<<32 * numSMs, 256>>>(viewport->imageBuffer.surface, denoiseOutput, viewport->imageBuffer.width, viewport->imageBuffer.height);
-    checkCudaErrors(cudaDeviceSynchronize());
+
 }
 OpenGLViewport::OpenGLConfig::OpenGLConfig(Camera camera, int spp, int maxRayDepth, int width, int height)
     : camera(std::move(camera)), spp(spp), maxRayDepth(maxRayDepth), width(width), height(height), curandState(nullptr) {

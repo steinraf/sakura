@@ -13,8 +13,8 @@
 GPU_ONLY void bilateralFilterSlides(FeatureBuffer *featureBuffer, Vec3f *output, float *weights, int i, int j, int width, int height){
 
 
-//            constexpr int neighbourDiameter = 21;
-//            constexpr int patchDiameter = 7;
+//    constexpr int neighbourDiameter = 21;
+//    constexpr int patchDiameter = 7;
 
     constexpr int neighbourDiameter = 5;
     constexpr int patchDiameter = 3;
@@ -53,7 +53,10 @@ GPU_ONLY void bilateralFilterSlides(FeatureBuffer *featureBuffer, Vec3f *output,
                                 //              (EPSILON + k^2 * (var[pI] + var[qI]))
                             };
 
-                            meanDist += computeFeature(featureBuffer->color);
+                            meanDist += computeFeature(featureBuffer->color)
+//                                        * computeFeature(featureBuffer->position)
+//                                        * computeFeature(featureBuffer->normal)
+                                    ;
 
                         }
                     }

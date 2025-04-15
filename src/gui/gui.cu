@@ -99,7 +99,7 @@ CPU_ONLY void GUI::loop(Scene &scene) {
 
 
         // Weak ptr because we want to destroy opengl context in GUI::~GUI()
-        static std::weak_ptr<Viewport> current_viewport = viewports.begin()->second;
+        static std::weak_ptr<Viewport> current_viewport = viewports["Sakura Raw Output"];
 
 
         const std::string debugTitle = "Debug Info";
@@ -147,7 +147,8 @@ CPU_ONLY void GUI::loop(Scene &scene) {
             if(ImGui::BeginCombo("Viewport", current_viewport.lock()->getTitle().c_str(), 0)) {
                 for(auto &[name, vp] : viewports) {
                     if(ImGui::Selectable(name.c_str(), current_viewport.lock()->getTitle() == name)) {
-                        current_viewport = vp;
+                        current_viewport = std::weak_ptr(vp);
+                        std::cout << "Selecting viewport " << name << "\n";
                     }
                 }
                 ImGui::EndCombo();
@@ -165,7 +166,7 @@ CPU_ONLY void GUI::loop(Scene &scene) {
             if(ImGui::IsKeyDown(ImGuiKey_MouseRight)){
                 scene.denoiserEnabled = true;
                 current_viewport = viewports["Sakura Denoiser"];
-            } else {
+            } else if(scene.denoiserEnabled) {
                 scene.denoiserEnabled = false;
                 current_viewport = viewports["Sakura Raw Output"];
             }
