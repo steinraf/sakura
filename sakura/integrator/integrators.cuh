@@ -17,4 +17,4 @@ __global__ void render_kern(TLAS *tlas, Texture envmap, FeatureBuffer *buffer, C
 __global__ void bufferToSurface(cudaSurfaceObject_t surface, FeatureBuffer *buffer, unsigned int width, unsigned int height);
 
 
-__device__ Eigen::Vector3f tonemap(Eigen::Vector3f color);
+__device__ Vec3f tonemap(Vec3f color);

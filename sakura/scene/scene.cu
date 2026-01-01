@@ -15,14 +15,7 @@
 #include "../integrator/integrators.cuh"
 #include "scene.cuh"
 
-#include "../acceleration/multibvh.cuh"
 #include "pugixml.hpp"
-
-//#define __half CUDA_HALF
-//#include <ImfRgbaFile.h>
-//#undef __half
-
-//#include <ImfRgbaFile.h>
 
 
 void Scene::render(cudaSurfaceObject_t surface, FeatureBuffer *buffer, Camera &camera, curandState *rngStates, const Eigen::Vector2<unsigned int> &windowSize, int spp) const {
@@ -46,36 +39,39 @@ SceneBuilder &SceneBuilder::addObj(
         throw std::runtime_error("Could not open file " + filename);
     }
 
-    std::vector<Eigen::Vector3f> vertices{};
-    std::vector<Eigen::Vector3f> normals{};
-    std::vector<Eigen::Vector2f> uvs{};
+    std::vector<Vec3f> vertices{};
+    std::vector<Vec3f> normals{};
+    std::vector<Vec2f> uvs{};
 
     std::vector<Triangle> trias{};
 
     std::string lineString{};
 
+
     while(std::getline(file, lineString)) {
+
         std::istringstream line{lineString};
         std::string start;
 
         line >> start;
 
         if(start == "v") {
-            Eigen::Vector3f vertex;
+            Vec3f vertex;
             line >> vertex.x() >> vertex.y() >> vertex.z();
             vertices.push_back(vertex);
         } else if(start == "vn") {
-            Eigen::Vector3f normal;
+            Vec3f normal;
             line >> normal.x() >> normal.y() >> normal.z();
             normals.push_back(normal);
         } else if(start == "vt") {
-            Eigen::Vector2f uv;
+            Vec2f uv;
             line >> uv.x() >> uv.y();
             uvs.push_back(uv);
         } else if(start == "f") {
-            std::array<Eigen::Vector3f, 3> faceVertices;
-            std::array<Eigen::Vector3f, 3> faceNormals;
-            std::array<Eigen::Vector2f, 3> uvTextures;
+            std::array<Vec3f, 3> faceVertices;
+            std::array<Vec3f, 3> faceNormals;
+            std::array<Vec2f, 3> uvTextures;
+
 
             for(int i = 0; i < 3; i++) {
                 std::string vertex;
@@ -83,24 +79,48 @@ SceneBuilder &SceneBuilder::addObj(
                 std::istringstream vertexStream{vertex};
                 std::string vertexIndex;
                 std::getline(vertexStream, vertexIndex, '/');
-                faceVertices[i] = vertices[std::stoi(vertexIndex) - 1];
+                faceVertices.at(i) = vertices.at(std::stoi(vertexIndex) - 1);
                 std::string textureIndex;
                 std::getline(vertexStream, textureIndex, '/');
                 int tIndex = std::stoi(textureIndex);
                 if(textureIndex.empty() || tIndex >= uvs.size()) {
-                    uvTextures[i] = Vec2f{i % 2, i / 2};
+                    uvTextures.at(i) = Vec2f{i % 2, i / 2};
                 } else {
-                    uvTextures[i] = uvs[tIndex - 1];
+                    uvTextures.at(i) = uvs.at(tIndex - 1);
                 }
                 std::string normalIndex;
                 std::getline(vertexStream, normalIndex, '/');
-                faceNormals[i] = normals[std::stoi(normalIndex) - 1];
+                faceNormals.at(i) = normals.at(std::stoi(normalIndex) - 1);
             }
 
 
             trias.emplace_back(faceVertices[0], faceVertices[1], faceVertices[2],
                                faceNormals[0], faceNormals[1], faceNormals[2],
                                uvTextures[0], uvTextures[1], uvTextures[2]);
+
+            if(line.peek() == ' ') {
+                std::string vertex;
+                line >> vertex;
+                std::istringstream vertexStream{vertex};
+                std::string vertexIndex;
+                std::getline(vertexStream, vertexIndex, '/');
+                Vec3f faceVertex4 = vertices.at(std::stoi(vertexIndex) - 1);
+                std::string textureIndex;
+                std::getline(vertexStream, textureIndex, '/');
+                int tIndex = std::stoi(textureIndex);
+                Vec2f uvTexture4;
+                if(textureIndex.empty() || tIndex >= uvs.size()) {
+                    uvTexture4 = Vec2f{0, 0};
+                } else {
+                    uvTexture4 = uvs.at(tIndex - 1);
+                }
+                std::string normalIndex;
+                std::getline(vertexStream, normalIndex, '/');
+                auto faceNormal4 = normals.at(std::stoi(normalIndex) - 1);
+                trias.emplace_back(faceVertex4, faceVertices[0], faceVertices[2],
+                                   faceNormal4, faceNormals[0], faceNormals[2],
+                                   uvTexture4, uvTextures[0], uvTextures[2]);
+            }
         }
     }
 
@@ -132,7 +152,10 @@ SceneBuilder &SceneBuilder::parseXML(
 
     [[maybe_unused]] const auto &rootLogger = sceneLogger.getNewSection("scene");
 
-#define CREATE_PARSER(name) {#name, [&](const pugi::xml_node &node, auto &logger) { parse_##name(node, logger); }}
+#define CREATE_PARSER(name)                                                                  \
+    {                                                                                        \
+        #name, [&](const pugi::xml_node &node, auto &logger) { parse_##name(node, logger); } \
+    }
 
     static const std::unordered_map<std::string, std::function<void(const pugi::xml_node &, ScopedLogger &)>>
             parsers{
@@ -212,6 +235,9 @@ void SceneBuilder::parse_shape(const pugi::xml_node &shape, auto &logger) {
                 xmlChildIterator(node, [&](const pugi::xml_node &node) {
                     tf = parseTransform(node, logger.getNewSection("transform"));
                 });
+            } else if(std::string(node.name()) == "bsdf") {
+                auto bsdf_logger = logger.getNewSection("bsdf");
+                parse_bsdf(node, bsdf_logger);
             } else {
                 logger.template log<true>("Ignoring Shape Node " + std::string(node.name()));
             }
@@ -296,7 +322,7 @@ void SceneBuilder::parse_shape(const pugi::xml_node &shape, auto &logger) {
 
     } else if(attribute == "sphere") {
         float radius = 1.0f;
-        Eigen::Vector3f pos = Eigen::Vector3f::Zero();
+        Vec3f pos = Vec3f::Zero();
         BSDF bsdf;
         std::optional<Vec3f> emitterRadiance = std::nullopt;
 
@@ -409,7 +435,7 @@ void SceneBuilder::parse_emitter(const pugi::xml_node &emitter, auto &logger) {
             }
         });
 
-        float dist = Texture::EMITTER_DIST() * 0.1f;
+        float dist = Texture::EMITTER_DIST() * 0.0001f;
         float r = dist * 0.1f;
         float k = dist * irradiance / (4 * M_PIf);//TODO use correct conversion from irradiance to radiance
         addSphere(r, dist * -dir, BSDF{Material::Diffuse(), Texture::ONES()}, k * Vec3f::Ones());
@@ -567,7 +593,7 @@ void SceneBuilder::parse_sensor(const pugi::xml_node &sensor, auto &logger) {
 Eigen::Isometry3f SceneBuilder::parseTransform(const pugi::xml_node &node, auto logger) const {
     auto nodeName = std::string(node.name());
     Eigen::Isometry3f tf = Eigen::Isometry3f::Identity();
-    auto vecToString = [](const Eigen::Vector3f &vec) {
+    auto vecToString = [](const Vec3f &vec) {
         return (std::ostringstream{} << vec[0] << ' ' << vec[1] << ' ' << vec[2]).str();
     };
     if(std::string(node.name()) == "matrix") {
@@ -584,7 +610,7 @@ Eigen::Isometry3f SceneBuilder::parseTransform(const pugi::xml_node &node, auto 
         }
         logger.template log<false>("<matrix value=\"" + (std::ostringstream{} << tf.matrix()).str() + "\"/>");
     } else if(std::string(node.name()) == "lookat") {
-        Eigen::Vector3f target = -Eigen::Vector3f::UnitZ(), origin = Eigen::Vector3f::Zero(), up = Eigen::Vector3f::UnitY();
+        Vec3f target = -Vec3f::UnitZ(), origin = Vec3f::Zero(), up = Vec3f::UnitY();
         for(const auto &attribute: node.attributes()) {
             if(std::string(attribute.name()) == "target") {
                 target = parseVector(attribute.value());
@@ -602,18 +628,35 @@ Eigen::Isometry3f SceneBuilder::parseTransform(const pugi::xml_node &node, auto 
         tf = Camera::lookAt(origin, target, up);
     } else if(std::string(node.name()) == "rotate") {
         // <rotate x="1" angle="114"/>
-        Eigen::Vector3f axis = [&node]() {
+        Vec3f axis = [&node]() {
             if(node.find_attribute([](const pugi::xml_attribute &attr) { return std::string(attr.name()) == "x"; })) {
-                return Eigen::Vector3f::UnitX();
+                return Vec3f::UnitX();
             } else if(node.find_attribute([](const pugi::xml_attribute &attr) { return std::string(attr.name()) == "y"; })) {
-                return Eigen::Vector3f::UnitY();
+                return Vec3f::UnitY();
             } else if(node.find_attribute([](const pugi::xml_attribute &attr) { return std::string(attr.name()) == "z"; })) {
-                return Eigen::Vector3f::UnitZ();
+                return Vec3f::UnitZ();
             } else {
                 throw std::runtime_error("No axis specified in rotate");
             }
         }();
         tf.rotate(Eigen::AngleAxisf(std::stof(node.attribute("angle").value()), axis));
+    } else if(std::string(node.name()) == "lookat") {
+        Vec3f target = -Vec3f::UnitZ(), origin = Vec3f::Zero(), up = Vec3f::UnitY();
+        for(const auto &attribute: node.attributes()) {
+            if(std::string(attribute.name()) == "target") {
+                target = parseVector(attribute.value());
+                logger.template log<false>("<lookat target=\"" + vecToString(target) + "\"/>");
+            } else if(std::string(attribute.name()) == "origin") {
+                origin = parseVector(attribute.value());
+                logger.template log<false>("<lookat origin=\"" + vecToString(origin) + "\"/>");
+            } else if(std::string(attribute.name()) == "up") {
+                up = parseVector(attribute.value());
+                logger.template log<false>("<lookat up=\"" + vecToString(up) + "\"/>");
+            } else {
+                logger.template log<true>("Ignoring attribute " + std::string(attribute.name()));
+            }
+        }
+        tf = Camera::lookAt(origin, target, up);
     } else {
         logger.template log<true>("Unknown transform type " + std::string(node.name()));
     }
@@ -621,10 +664,10 @@ Eigen::Isometry3f SceneBuilder::parseTransform(const pugi::xml_node &node, auto 
 
     return tf;
 }
-Eigen::Vector3f SceneBuilder::parseVector(std::string str) {
+Vec3f SceneBuilder::parseVector(std::string str) {
     std::replace(str.begin(), str.end(), ',', ' ');
     std::istringstream stream{str};
-    Eigen::Vector3f vec;
+    Vec3f vec;
     if(!(stream >> vec.x() >> vec.y() >> vec.z())) {
         throw std::runtime_error("Could not parse vector " + str);
     }
@@ -667,7 +710,7 @@ void SceneBuilder::parse_bsdf(const pugi::xml_node &bsdf, auto &logger) {
                     xmlChildIterator(node, [&](const pugi::xml_node &node) {
                         if(std::string(node.name()) == "rgb") {
                             if(std::string(node.attribute("name").value()) == "reflectance") {
-                                Eigen::Vector3f color = parseVector(node.attribute("value").value());
+                                Vec3f color = parseVector(node.attribute("value").value());
                                 bsdfMap[id] = BSDF{Material{MaterialType::DIFFUSE}, Texture{color}};
                                 logger.template log<false>(R"(<rgb name="reflectance" value=")" + (std::ostringstream{} << color.matrix()).str() + "\"/>");
                             } else {
@@ -758,7 +801,7 @@ void SceneBuilder::parse_bsdf(const pugi::xml_node &bsdf, auto &logger) {
                     xmlChildIterator(node, [&](const pugi::xml_node &node) {
                         if(std::string(node.name()) == "rgb") {
                             if(std::string(node.attribute("name").value()) == "diffuse_reflectance") {
-                                Eigen::Vector3f color = parseVector(node.attribute("value").value());
+                                Vec3f color = parseVector(node.attribute("value").value());
                                 bsdfMap[id] = BSDF{Material{MaterialType::DIFFUSE}, Texture{color}};
                                 logger.template log<false>(R"(<rgb name="diffuse_reflectance" value=")" + (std::ostringstream{} << color.matrix()).str() + "\"/>");
                             } else {
@@ -774,7 +817,7 @@ void SceneBuilder::parse_bsdf(const pugi::xml_node &bsdf, auto &logger) {
                     xmlChildIterator(node, [&](const pugi::xml_node &node) {
                         if(std::string(node.name()) == "rgb") {
                             if(std::string(node.attribute("name").value()) == "diffuse_reflectance") {
-                                Eigen::Vector3f color = parseVector(node.attribute("value").value());
+                                Vec3f color = parseVector(node.attribute("value").value());
                                 bsdfMap[id] = BSDF{Material{MaterialType::DIFFUSE}, Texture{color}};
                                 logger.template log<false>(R"(<rgb name="diffuse_reflectance" value=")" + (std::ostringstream{} << color.matrix()).str() + "\"/>");
                             } else {
@@ -784,10 +827,6 @@ void SceneBuilder::parse_bsdf(const pugi::xml_node &bsdf, auto &logger) {
                             logger.template log<true>("Ignoring BSDF " + std::string(node.name()));
                         }
                     });
-                } else if(std::string(node.attribute("type").value()) == "twosided") {
-                    logger.template log<false>("Recursively parsing twosided");
-                    auto bsdfLoggerSection = logger.getNewSection("bsdf");
-                    parse_bsdf(node, bsdfLoggerSection);
                 } else {
                     logger.template log<true>("Ignoring BSDF with type " + std::string(node.attribute("type").value()));
                 }
@@ -906,7 +945,7 @@ SceneBuilder &SceneBuilder::addCube(const Eigen::Affine3f &tf, BSDF bsdf, std::o
 SceneBuilder &SceneBuilder::addSphere(float radius, const Vec3f &center, BSDF bsdf, std::optional<Vec3f> emitterRadiance) {
     Eigen::Affine3f tf = Eigen::Affine3f::Identity();
     tf.translate(center);
-    tf.scale(Eigen::Vector3f::Constant(radius));
+    tf.scale(Vec3f::Constant(radius));
 
     addObj("scenes/sphere.obj", tf, std::move(bsdf), std::move(emitterRadiance));
 

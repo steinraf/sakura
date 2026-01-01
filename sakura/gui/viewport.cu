@@ -56,11 +56,11 @@ __global__ void decayFeatureBuffer(FeatureBuffer *buffer, float k) {
 }
 
 __host__ FeatureBuffer::FeatureBuffer(size_t numElements) : numElements(numElements), color(nullptr), normal(nullptr), position(nullptr), albedo(nullptr), uv(nullptr) {
-    checkCudaErrors(cudaMallocManaged(&color, numElements * sizeof(Statistic<Eigen::Vector3f>)));
-    checkCudaErrors(cudaMallocManaged(&normal, numElements * sizeof(Statistic<Eigen::Vector3f>)));
-    checkCudaErrors(cudaMallocManaged(&position, numElements * sizeof(Statistic<Eigen::Vector3f>)));
-    checkCudaErrors(cudaMallocManaged(&albedo, numElements * sizeof(Statistic<Eigen::Vector3f>)));
-    checkCudaErrors(cudaMallocManaged(&uv, numElements * sizeof(Statistic<Eigen::Vector3f>)));
+    checkCudaErrors(cudaMallocManaged(&color, numElements * sizeof(Statistic<Vec3f>)));
+    checkCudaErrors(cudaMallocManaged(&normal, numElements * sizeof(Statistic<Vec3f>)));
+    checkCudaErrors(cudaMallocManaged(&position, numElements * sizeof(Statistic<Vec3f>)));
+    checkCudaErrors(cudaMallocManaged(&albedo, numElements * sizeof(Statistic<Vec3f>)));
+    checkCudaErrors(cudaMallocManaged(&uv, numElements * sizeof(Statistic<Vec3f>)));
     clear();
 }
 
@@ -148,7 +148,7 @@ void OpenGLViewport::render() {
     //    float circleScale = 20.0;
     //    float circleSpeed = 2.0;
     //
-    //    translateCamera(dt * Eigen::Vector3f{circleScale * std::sin(t * circleSpeed), 0.0, circleScale * std::cos(t * circleSpeed)});
+    //    translateCamera(dt * Vec3f{circleScale * std::sin(t * circleSpeed), 0.0, circleScale * std::cos(t * circleSpeed)});
 
 
     ImGui::Begin(title.c_str(), nullptr, ImGuiWindowFlags_NoDecoration);// , nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings
@@ -180,12 +180,12 @@ void OpenGLViewport::render() {
 
     ImGui::End();
 }
-void OpenGLViewport::translateCamera(const Eigen::Vector3f &translation) {
+void OpenGLViewport::translateCamera(const Vec3f &translation) {
     camera.translate(translation);
     featureBuffer->clear();
 }
 
-void OpenGLViewport::translateCameraRelative(const Eigen::Vector3f &translation) {
+void OpenGLViewport::translateCameraRelative(const Vec3f &translation) {
     camera.relativeTranslate(translation);
     featureBuffer->clear();
 }
@@ -209,8 +209,8 @@ std::string OpenGLViewport::getTitle() const {
 }
 void OpenGLViewport::generateDebugInformation() {
 }
-Eigen::Vector2f OpenGLViewport::getWindowSize() const {
-    return Eigen::Vector2f{size[0], size[1]};
+Vec2f OpenGLViewport::getWindowSize() const {
+    return Vec2f{size[0], size[1]};
 }
 FeatureBuffer *OpenGLViewport::getFeatureBuffer() const {
     return featureBuffer;
@@ -221,22 +221,22 @@ void OpenGLViewport::handleUserInput() {
         cameraVel *= 10;
     }
     if(ImGui::IsKeyDown(ImGuiKey_W)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{0, 0, dt});
+        translateCameraRelative(cameraVel * Vec3f{0, 0, dt});
     }
     if(ImGui::IsKeyDown(ImGuiKey_S)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{0, 0, -dt});
+        translateCameraRelative(cameraVel * Vec3f{0, 0, -dt});
     }
     if(ImGui::IsKeyDown(ImGuiKey_Space)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{0, dt, 0});
+        translateCameraRelative(cameraVel * Vec3f{0, dt, 0});
     }
     if(ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{0, -dt, 0});
+        translateCameraRelative(cameraVel * Vec3f{0, -dt, 0});
     }
     if(ImGui::IsKeyDown(ImGuiKey_A)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{dt, 0, 0});
+        translateCameraRelative(cameraVel * Vec3f{dt, 0, 0});
     }
     if(ImGui::IsKeyDown(ImGuiKey_D)) {
-        translateCameraRelative(cameraVel * Eigen::Vector3f{-dt, 0, 0});
+        translateCameraRelative(cameraVel * Vec3f{-dt, 0, 0});
     }
     if(ImGui::IsKeyDown(ImGuiKey_F)) {
         if(ImGui::IsWindowHovered()) {

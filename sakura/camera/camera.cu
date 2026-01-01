@@ -11,13 +11,13 @@
 #include "camera.cuh"
 
 
-__host__ __device__ Camera::Camera() noexcept
+CPU_GPU Camera::Camera() noexcept
     : Camera(Eigen::Isometry3f::Identity(), 90.f, 16.f / 9.f, 0.0f, 1.0f) {}
 
-__host__ __device__ Camera::Camera(Eigen::Isometry3f tf, float fov,
-                                   float aspectRatio, float aperture,
-                                   float focusDist, float near,
-                                   float far) noexcept
+CPU_GPU Camera::Camera(Eigen::Isometry3f tf, float fov,
+                       float aspectRatio, float aperture,
+                       float focusDist, float near,
+                       float far) noexcept
     : focusDist(focusDist),
       cameraTransform(std::move(tf)),
       sampleToCamera(),
@@ -37,19 +37,19 @@ __device__ Ray Camera::getRay(float u, float v, Sampler &sampler) const {
 
     assert(nearSample[3] != 0.0f);
 
-    Eigen::Vector3f nearP = Eigen::Vector3f{nearSample[0] / nearSample[3],
-                                            nearSample[1] / nearSample[3],
-                                            nearSample[2] / nearSample[3]};
+    Vec3f nearP = Vec3f{nearSample[0] / nearSample[3],
+                        nearSample[1] / nearSample[3],
+                        nearSample[2] / nearSample[3]};
 
     auto diskSampleLens = sample::squareToUniformDisk(sampler.getSample2D());
 
-    Eigen::Vector3f pLens =
-            lensRadius * Eigen::Vector3f{diskSampleLens[0], diskSampleLens[1], 0.0};
+    Vec3f pLens =
+            lensRadius * Vec3f{diskSampleLens[0], diskSampleLens[1], 0.0};
 
     float ft = focusDist / nearP[2];
-    Eigen::Vector3f pFocus = ft * nearP;
-    Eigen::Vector3f dNorm = (pFocus - pLens).normalized();
-    Eigen::Vector3f dir = (cameraTransform.linear() * dNorm).normalized();
+    Vec3f pFocus = ft * nearP;
+    Vec3f dNorm = (pFocus - pLens).normalized();
+    Vec3f dir = (cameraTransform.linear() * dNorm).normalized();
 
     if(!isfinite(dir[0]) || !isfinite(dir[1]) || !isfinite(dir[2])) {
         assert(false);
@@ -63,15 +63,15 @@ __host__ void Camera::createTranslationSlider() {
     ImGui::SliderFloat("Camera Y", &cameraTransform.translation()[1], -100, 100);
     ImGui::SliderFloat("Camera Z", &cameraTransform.translation()[2], -100, 100);
 }
-__host__ __device__ void Camera::translate(const Eigen::Vector3f &x) {
+CPU_GPU void Camera::translate(const Vec3f &x) {
     cameraTransform.translation() += x;
-    //    Eigen::Vector3f currentCenter = cameraTransform.translation();
-    //    //    Eigen::Vector3f currentLookat = Vec3f{10, 1.5, -0.5};// cameraTransform.translation() + cameraTransform.linear().col(2) * focusDist;
-    //    Eigen::Vector3f currentLookat = Vec3f{-0.695605, 1.607947, -0.588471};
+    //    Vec3f currentCenter = cameraTransform.translation();
+    //    //    Vec3f currentLookat = Vec3f{10, 1.5, -0.5};// cameraTransform.translation() + cameraTransform.linear().col(2) * focusDist;
+    //    Vec3f currentLookat = Vec3f{-0.695605, 1.607947, -0.588471};
     //
-    //    Eigen::Vector3f currentUp = Vec3f{0.0, 1.0, 0.0};//cameraTransform.linear().col(1);
+    //    Vec3f currentUp = Vec3f{0.0, 1.0, 0.0};//cameraTransform.linear().col(1);
     //
-    //    Eigen::Vector3f x = Vec3f::Zero();//30 * cameraTransform.linear().col(0) * 0.01;
+    //    Vec3f x = Vec3f::Zero();//30 * cameraTransform.linear().col(0) * 0.01;
     //
     //    cameraTransform = lookAt(currentCenter + x, currentLookat, currentUp);
     //    focusDist = (currentLookat - (currentCenter + x)).norm();
@@ -92,13 +92,13 @@ __host__ __device__ void Camera::translate(const Eigen::Vector3f &x) {
 }
 
 
-__host__ __device__ void Camera::relativeTranslate(const Eigen::Vector3f &x) {
+CPU_GPU void Camera::relativeTranslate(const Vec3f &x) {
     cameraTransform.translation() += cameraTransform.linear() * x;
 }
-__host__ __device__ Eigen::Isometry3f Camera::lookAt(const Eigen::Vector3f &center, const Eigen::Vector3f &lookAt, const Eigen::Vector3f &up) {
-    Eigen::Vector3f f = (lookAt - center).normalized();
-    Eigen::Vector3f r = up.cross(-f).normalized();
-    Eigen::Vector3f u = -f.cross(r);
+CPU_GPU Eigen::Isometry3f Camera::lookAt(const Vec3f &center, const Vec3f &lookAt, const Vec3f &up) {
+    Vec3f f = (lookAt - center).normalized();
+    Vec3f r = up.cross(-f).normalized();
+    Vec3f u = -f.cross(r);
 
     Eigen::Isometry3f tf = Eigen::Isometry3f::Identity();
     tf.linear().col(0) = r;
@@ -108,23 +108,23 @@ __host__ __device__ Eigen::Isometry3f Camera::lookAt(const Eigen::Vector3f &cent
 
     return tf;
 }
-__host__ __device__ void Camera::generateSampleToCameraMatrix() {
+CPU_GPU void Camera::generateSampleToCameraMatrix() {
     sampleToCamera.matrix() << 2 * k, 0.f, 0.f, -k,
             0.f, -2 * k / aspectRatio, 0.f, k / aspectRatio,
             0.f, 0.f, 0.f, 1.f,
             0.f, 0.f, (near - far) / (near * far), 1.f / near;
 }
-__host__ __device__ void Camera::setK(float fov) {
+CPU_GPU void Camera::setK(float fov) {
     k = tanf(fov * M_PIf / 360.f);
 }
-__host__ __device__ void Camera::updateFOV(float fov) {
+CPU_GPU void Camera::updateFOV(float fov) {
     setK(fov);
     generateSampleToCameraMatrix();
 }
-__host__ __device__ void Camera::updateLensRadius(float aperture) {
+CPU_GPU void Camera::updateLensRadius(float aperture) {
     lensRadius = sqrtf(2.f) / 2.f * aperture * aspectRatio;
 }
-__host__ __device__ void Camera::setFocusPlane(const Vec3f &point) {
+CPU_GPU void Camera::setFocusPlane(const Vec3f &point) {
     focusDist = (point - cameraTransform.translation()).norm();
 }
 

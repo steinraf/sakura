@@ -15,13 +15,29 @@ find_package(Eigen3 REQUIRED)
 
 
 include(FindCUDA/select_compute_arch)
-CUDA_DETECT_INSTALLED_GPUS(INSTALLED_GPU_CCS_1)
-string(STRIP "${INSTALLED_GPU_CCS_1}" INSTALLED_GPU_CCS_2)
-string(REPLACE " " ";" INSTALLED_GPU_CCS_3 "${INSTALLED_GPU_CCS_2}")
-string(REPLACE "." "" CUDA_ARCH_LIST "${INSTALLED_GPU_CCS_3}")
-SET(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH_LIST})
+set(CUDA_ARCHITECTURES "")
+if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    execute_process(
+            COMMAND nvidia-smi --query-gpu=compute_cap --format=csv,noheader
+            OUTPUT_VARIABLE GPU_ARCHS
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    string(REPLACE "\n" ";" GPU_ARCH_LIST "${GPU_ARCHS}")
+    list(REMOVE_DUPLICATES GPU_ARCH_LIST)
 
-message("COMPILING FOR CUDA_ARCH_LIST: " "${CUDA_ARCH_LIST}")
+    foreach (ARCH IN LISTS GPU_ARCH_LIST)
+        string(REPLACE "." "" ARCH_CODE "${ARCH}")
+        list(APPEND CUDA_ARCHITECTURES "${ARCH_CODE}")
+    endforeach ()
+
+    if (CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCHITECTURES}")
+        message(STATUS "Setting CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+    else ()
+        set(CMAKE_CUDA_ARCHITECTURES "all-major")  # Fallback
+        message(STATUS "No GPU detected, using: ${CMAKE_CUDA_ARCHITECTURES}")
+    endif ()
+endif ()
 
 
 include_directories(libs/pugixml/src)
@@ -165,7 +181,11 @@ target_compile_options(${PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
         -Wall
         >)
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY "${CUDA_ARCH_LIST}")
+if (CUDA_ARCHITECTURES)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+            CUDA_ARCHITECTURES "${CUDA_ARCHITECTURES}"
+    )
+endif ()
 
 add_dependencies(${PROJECT_NAME} pugixml)
 

@@ -4,7 +4,6 @@
 
 #include "../emitter/emitter.cuh"
 #include "../geometry/intersection.cuh"
-#include "../geometry/ray.cuh"
 #include "bvh.cuh"
 #include "multibvh.cuh"
 
@@ -30,14 +29,14 @@ BLAS::BLAS(const MeshDescriptorHost &meshDescriptor) noexcept
 
     assert(bvh);
 }
-__host__ __device__ AABB BLAS::getBoundingBox() const noexcept {
+CPU_GPU AABB BLAS::getBoundingBox() const noexcept {
     return bvh->getBoundingBox();
 }
-__host__ __device__ float BLAS::pdfSurface(const ShapeQueryRecord &sqr) const noexcept {
+CPU_GPU float BLAS::pdfSurface(const ShapeQueryRecord &sqr) const noexcept {
 
     return 1.0f / (bvh->getArea() * transform.linear().determinant());
 }
-__host__ __device__ void BLAS::sampleSurface(ShapeQueryRecord &sqr, const Vec3f &rng) const noexcept {
+CPU_GPU void BLAS::sampleSurface(ShapeQueryRecord &sqr, const Vec3f &rng) const noexcept {
     const Vec3f p = sample::squareToUniformTriangle({rng[0], rng[1]});
     const auto triangle = bvh->sampleTriangle(rng[2]);
     assert(triangle);
@@ -49,7 +48,16 @@ __host__ __device__ void BLAS::sampleSurface(ShapeQueryRecord &sqr, const Vec3f 
 
     sqr.pdf = pdfSurface(sqr);// TODO check if this should be pdf of triangle?
 }
-
+__host__ __device__ bool BLAS::intersectAABB(Ray ray, Intersection &its) const noexcept {
+    ray.transform(inverseTransform);
+    assert(bvh);
+    bool didIntersect = bvh->intersectAABB(ray, its);
+    if(didIntersect) {
+        its.point = transform * its.point;
+        its.shFrame.rotate(transform);
+    }
+    return didIntersect;
+}
 
 __device__ bool TLAS::intersect(const Ray &_ray, Intersection &its, bool isShadowRay) const noexcept {
     Ray ray = _ray;
@@ -79,7 +87,7 @@ __device__ bool TLAS::intersect(const Ray &_ray, Intersection &its, bool isShado
 AABB getTLASAABB(BLAS *start, size_t count) {
     AABB boundingBox = thrust::transform_reduce(
             thrust::device, start, start + count,
-            [=] __host__ __device__(const BLAS &b) -> AABB {
+            [=] CPU_GPU(const BLAS &b) -> AABB {
                 return b.getBoundingBox();
             },
             AABB{}, thrust::plus<AABB>());
@@ -112,7 +120,7 @@ __host__ TLAS::TLAS(const std::vector<MeshDescriptorHost> &_meshes, const std::v
     checkCudaErrors(cudaDeviceSynchronize());
     assert(meshes);
 }
-__host__ __device__ const AreaLight *TLAS::getRandomEmitter(float d) {
+CPU_GPU const AreaLight *TLAS::getRandomEmitter(float d) {
     if(numEmitters == 0) return nullptr;
 
     if(d == 1.0f) d = 0.0f;//curand_uniform random numbers are in (0, 1]
@@ -130,4 +138,26 @@ __host__ void __host__ TLAS::cleanup() {
 __device__ bool TLAS::intersect(const Ray &ray) const noexcept {
     Intersection its;
     return intersect(ray, its, true);
+}
+__device__ bool TLAS::intersectAABB(const Ray &_ray, Intersection &its) const noexcept {
+    Ray ray = _ray;
+    bool hit = false;
+    //TODO make tree structure
+    for(size_t i = 0; i < numMeshes; ++i) {
+        if(meshes[i].intersectAABB(ray, its)) {
+            hit = true;
+            ray.maxDist = its.t;
+            its.meshf = &meshes[i];
+            its.emitter = nullptr;
+        }
+    }
+    for(size_t i = 0; i < numEmitters; ++i) {
+        if(emitters[i].intersectAABB(ray, its)) {
+            hit = true;
+            ray.maxDist = its.t;
+            its.meshf = emitters[i].blas;
+            its.emitter = &emitters[i];
+        }
+    }
+    return hit;
 }

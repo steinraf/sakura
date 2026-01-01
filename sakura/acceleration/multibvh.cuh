@@ -27,15 +27,17 @@ class BLAS {
 public:
     __host__ explicit BLAS(const MeshDescriptorHost &meshDescriptor) noexcept;
 
-    [[nodiscard]] __host__ __device__ AABB getBoundingBox() const noexcept;// todo account for transform
+    [[nodiscard]] CPU_GPU AABB getBoundingBox() const noexcept;// todo account for transform
 
     [[nodiscard]] __device__ bool intersect(
             Ray ray, Intersection &its,
             bool isShadowRay = false) const noexcept;
 
-    [[nodiscard]] __host__ __device__ float pdfSurface(const ShapeQueryRecord &sqr) const noexcept;
+    [[nodiscard]] CPU_GPU bool intersectAABB(Ray ray, Intersection &its) const noexcept;
 
-    __host__ __device__ void sampleSurface(ShapeQueryRecord &sqr, const Vec3f &rng) const noexcept;
+    [[nodiscard]] CPU_GPU float pdfSurface(const ShapeQueryRecord &sqr) const noexcept;
+
+    CPU_GPU void sampleSurface(ShapeQueryRecord &sqr, const Vec3f &rng) const noexcept;
 
     BSDF bsdf;
 
@@ -58,20 +60,22 @@ public:
             const Ray &ray, Intersection &its,
             bool isShadowRay = false) const noexcept;
 
+    [[nodiscard]] __device__ bool intersectAABB(const Ray &ray, Intersection &its) const noexcept;
+
     [[nodiscard]] __device__ bool intersect(const Ray &ray) const noexcept;
 
     void __host__ cleanup();
 
-    __host__ __device__ AABB getBoundingBox() const {
+    CPU_GPU AABB getBoundingBox() const {
         return boundingBox;
     }
 
 
-    __host__ __device__ const AreaLight *getRandomEmitter(float d);
-    __host__ __device__ size_t getEmitterCount() const {
+    CPU_GPU const AreaLight *getRandomEmitter(float d);
+    CPU_GPU size_t getEmitterCount() const {
         return numEmitters;
     }
-    __host__ __device__ bool containsEmitters() const {
+    CPU_GPU bool containsEmitters() const {
         return numEmitters > 0;
     }
 

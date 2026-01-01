@@ -9,19 +9,24 @@
 
 #define denoiseGaussian denoise
 
+
+#define DENOISER_EPSILON 1e-6
+
 __global__ void denoiseGaussian(const FeatureBuffer *bufferIn, Vec3f *output, float *weights, unsigned int width, unsigned int height) {
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
         pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
         unsigned int x = pixelIndex % width, y = pixelIndex / width;
 
         // Simply apply gaussian blur
-        constexpr int MAX_RADIUS = 8;
-        constexpr float color_k = 2.00f;
+        constexpr int MAX_RADIUS = 4;
+        constexpr float color_k = 5.20f, spatial_k = 0.02f, var_k = 1.0f;
 
-        Eigen::Vector3f color = Eigen::Vector3f::Zero();
+        Vec3f color = Vec3f::Zero();
         float weight = 0.0f;
 
         Vec3f pos = bufferIn->position[pixelIndex].getMean();
+        Vec3f var = bufferIn->color[pixelIndex].getSampleVariance();
+        Vec3f normal = bufferIn->normal[pixelIndex].getMean();
 
         for(int dx = -MAX_RADIUS; dx <= MAX_RADIUS; ++dx) {
             for(int dy = -MAX_RADIUS; dy <= MAX_RADIUS; ++dy) {
@@ -31,16 +36,35 @@ __global__ void denoiseGaussian(const FeatureBuffer *bufferIn, Vec3f *output, fl
                 }
 
                 Vec3f currentColor = bufferIn->color[nx + ny * width].getMean();
+                Vec3f currentVar = bufferIn->color[nx + ny * width].getSampleVariance();
+                Vec3f currentNormal = bufferIn->normal[nx + ny * width].getMean();
 
-                const float distanceSq = Eigen::Vector2f{dx, dy}.squaredNorm();
-                const float gaussian = std::exp(-distanceSq / (color_k * color_k));
+                const float distanceSq = Vec2f{dx, dy}.squaredNorm();
+                const float spatialDistSq = (bufferIn->position[nx + ny * width].getMean() - pos).squaredNorm();
+                const float normalDot = std::abs(normal.dot(currentNormal));
 
-                color += currentColor * gaussian;
-                weight += gaussian;
+                const float varRatio = [&]() -> float {
+                    if(currentVar.minCoeff() < DENOISER_EPSILON) {
+                        return var.maxCoeff() / DENOISER_EPSILON;
+                    } else {
+                        return (var.array() / currentVar.array()).maxCoeff();
+                    }
+                }();
+
+                const float gaussianScreenSpace = std::exp(-distanceSq / (color_k * color_k));
+                const float gaussianSpatial = std::exp(-spatialDistSq / (spatial_k * spatial_k));
+                const float gaussianVar = std::exp(-varRatio / (var_k * var_k));
+
+                float w = gaussianSpatial * normalDot;
+
+                color += currentColor * w;
+                weight += w;
             }
         }
 
-        Eigen::Vector3f localAverageColor = color / weight;
+        if(weight < DENOISER_EPSILON) weight = DENOISER_EPSILON;
+
+        Vec3f localAverageColor = color / weight;
 
         output[pixelIndex] = localAverageColor;
         weights[pixelIndex] = 0.0f;
@@ -54,7 +78,7 @@ __global__ void denoiseIdentity(const FeatureBuffer *bufferIn, Vec3f *output, fl
         pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
         size_t x = pixelIndex % width, y = pixelIndex / width;
 
-        Eigen::Vector3f totalColor = bufferIn->color[pixelIndex].getMean();
+        Vec3f totalColor = bufferIn->color[pixelIndex].getMean();
         weights[pixelIndex] = 0.0f;
 
         output[pixelIndex] = totalColor;
@@ -62,8 +86,10 @@ __global__ void denoiseIdentity(const FeatureBuffer *bufferIn, Vec3f *output, fl
     }
 }
 
-#define DENOISER_EPSILON 1e-6
+
 __global__ void applyWeights(cudaSurfaceObject_t surface, const Vec3f *buffer, float *weights, unsigned int width, unsigned int height) {
+
+
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
         pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
         size_t x = width - 1 - pixelIndex % width, y = pixelIndex / width;

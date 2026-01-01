@@ -26,7 +26,7 @@
 #define IMG_EPS 1e-4f
 
 
-__host__ __device__ Color Texture::eval(const Eigen::Vector2f &uv) const noexcept {
+CPU_GPU Color Texture::eval(const Vec2f &uv) const noexcept {
     switch(type) {
         case TextureType::CONSTANT:
             return constant;
@@ -65,10 +65,10 @@ __host__ __device__ Color Texture::eval(const Eigen::Vector2f &uv) const noexcep
             return {0.0f, 0.0f, 0.0f};
     }
 }
-__host__ __device__ Texture::Texture(Color color) noexcept
+CPU_GPU Texture::Texture(Color color) noexcept
     : type(TextureType::CONSTANT), constant{std::move(color)} {
 }
-__host__ __device__ Texture::Texture(const Texture &other) noexcept : type(other.type) {
+CPU_GPU Texture::Texture(const Texture &other) noexcept : type(other.type) {
     switch(other.type) {
         case TextureType::CONSTANT:
             constant = other.constant;
@@ -81,7 +81,7 @@ __host__ __device__ Texture::Texture(const Texture &other) noexcept : type(other
             break;
     }
 }
-__host__ __device__ Texture::Texture(Texture &&other) noexcept : type(other.type) {
+CPU_GPU Texture::Texture(Texture &&other) noexcept : type(other.type) {
     switch(other.type) {
         case TextureType::CONSTANT:
             constant = other.constant;
@@ -94,7 +94,7 @@ __host__ __device__ Texture::Texture(Texture &&other) noexcept : type(other.type
             break;
     }
 }
-__host__ __device__ Texture &Texture::operator=(const Texture &other) noexcept {
+CPU_GPU Texture &Texture::operator=(const Texture &other) noexcept {
     type = other.type;
     switch(other.type) {
         case TextureType::CONSTANT:
@@ -109,7 +109,7 @@ __host__ __device__ Texture &Texture::operator=(const Texture &other) noexcept {
     }
     return *this;
 }
-__host__ __device__ Texture &Texture::operator=(Texture &&other) noexcept {
+CPU_GPU Texture &Texture::operator=(Texture &&other) noexcept {
     type = other.type;
     switch(other.type) {
         case TextureType::CONSTANT:
@@ -131,7 +131,7 @@ struct ColorToRadiance {
     const int width, height;
     const bool isEnvMap;
 
-    __host__ __device__ float operator()(const Vec3f &v) const noexcept {
+    CPU_GPU float operator()(const Vec3f &v) const noexcept {
         const auto y = static_cast<float>((&v - data) % width);
         if(isEnvMap) {
             return std::clamp(v.norm(), 0.0f, 100.0f) * std::sin(y / static_cast<float>(height));
@@ -148,7 +148,7 @@ struct ColorToCDF {
     const float sum;
     const bool isEnvMap;
 
-    __host__ __device__ float operator()(const Vec3f &v) const noexcept {
+    CPU_GPU float operator()(const Vec3f &v) const noexcept {
         const auto y = static_cast<float>((&v - data) % width);
         if(isEnvMap) {
             return std::clamp(v.norm(), 0.0f, 1000.0f) * std::sin(y / static_cast<float>(height)) / sum;
@@ -212,7 +212,7 @@ __host__ Texture::Texture(const std::filesystem::path &path, bool isEnvMap, Eige
     ColorToCDF colorToCdf{image.texture, image.width, image.height, cdfSum, isEnvMap};
     thrust::transform_inclusive_scan(devPtr, devPtr + image.width * image.height, image.cdf, colorToCdf, thrust::plus<float>());
 }
-__host__ __device__ float Texture::pdf(size_t idx) const noexcept {
+CPU_GPU float Texture::pdf(size_t idx) const noexcept {
     switch(type) {
         case TextureType::CONSTANT:
             return 1.0f;
@@ -231,7 +231,7 @@ __host__ Texture::Texture() noexcept {
     constant = t.constant;
 }
 __host__ Texture Texture::RandomConstant() noexcept {
-    return Texture{Eigen::Vector3f::Random().normalized().cwiseAbs()};
+    return Texture{Vec3f::Random().normalized().cwiseAbs()};
 }
 
 __host__ Texture Texture::ZERO() noexcept {
@@ -240,15 +240,15 @@ __host__ Texture Texture::ZERO() noexcept {
 }
 
 __host__ Texture Texture::DEFAULT() noexcept {
-    Texture t{{255.f / 255, 183.f / 255, 197.f / 255}};
+    Texture t{{0 * 255.f / 255, 0 * 183.f / 255, 197.f / 255}};
     return t;
 }
-__host__ __device__ float Texture::pdf(const EmitterQueryRecord &emitterQueryRecord) const noexcept {
+CPU_GPU float Texture::pdf(const EmitterQueryRecord &emitterQueryRecord) const noexcept {
     const float pdf = this->pdf(emitterQueryRecord.idx);
     const float k = std::max(IMG_EPS, 2 * std::sin(M_PIf * emitterQueryRecord.uv[1]));
     return pdf * M_1_PIf * M_1_PIf / k;
 }
-__host__ __device__ Color Texture::eval(const Ray &_ray) const noexcept {
+CPU_GPU Color Texture::eval(const Ray &_ray) const noexcept {
     Ray ray = _ray;
     ray.transform(image.inverseTransform);
     const Vec3f dir = ray.dir.normalized();
@@ -261,9 +261,9 @@ __host__ __device__ Color Texture::eval(const Ray &_ray) const noexcept {
         return Color::Zero();
     }
 
-    return eval(Eigen::Vector2f{(u < 0) ? (u + 1) : u, v});
+    return eval(Vec2f{(u < 0) ? (u + 1) : u, v});
 }
-__host__ __device__ Color Texture::sample(EmitterQueryRecord &emitterQueryRecord, const Eigen::Vector3f &sample) const noexcept {
+CPU_GPU Color Texture::sample(EmitterQueryRecord &emitterQueryRecord, const Vec3f &sample) const noexcept {
     switch(type) {
         case TextureType::CONSTANT:
             return constant;
@@ -300,7 +300,7 @@ __host__ __device__ Color Texture::sample(EmitterQueryRecord &emitterQueryRecord
             return {0.0f, 0.0f, 0.0f};
     }
 }
-__host__ __device__ Color Texture::getConstant() const noexcept {
+CPU_GPU Color Texture::getConstant() const noexcept {
     assert(type == TextureType::CONSTANT);
     return constant;
 }

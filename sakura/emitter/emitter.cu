@@ -72,3 +72,6 @@ __device__ Color AreaLight::eval(const EmitterQueryRecord &eqr) const noexcept {
     }
     return radiance.array() * blas->bsdf.evalTexture(eqr.uv).array();
 }
+__device__ bool AreaLight::intersectAABB(Ray ray, Intersection &its) const {
+    return blas->intersectAABB(std::move(ray), its);
+}

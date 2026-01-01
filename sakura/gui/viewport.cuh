@@ -28,7 +28,7 @@ enum class BUFFERTYPE {
 
 
 template<BUFFERTYPE B>
-__global__ void renderBuffer(const Statistic<Eigen::Vector3f> *stat, cudaSurfaceObject_t surface, int width, int height, auto /* Vector Transformation */ f);
+__global__ void renderBuffer(const Statistic<Vec3f> *stat, cudaSurfaceObject_t surface, int width, int height, auto /* Vector Transformation */ f);
 
 __global__ void clearFeatureBuffer(FeatureBuffer *buffer);
 
@@ -41,11 +41,11 @@ struct FeatureBuffer {
     void __host__ decay(float k);
 
     size_t numElements;
-    Statistic<Eigen::Vector3f> *color;
-    Statistic<Eigen::Vector3f> *normal;
-    Statistic<Eigen::Vector3f> *position;
-    Statistic<Eigen::Vector3f> *albedo;
-    Statistic<Eigen::Vector3f> *uv;
+    Statistic<Vec3f> *color;
+    Statistic<Vec3f> *normal;
+    Statistic<Vec3f> *position;
+    Statistic<Vec3f> *albedo;
+    Statistic<Vec3f> *uv;
 };
 
 class Renderable {
@@ -73,16 +73,16 @@ public:
     ~OpenGLViewport() override;
 
 
-    void translateCamera(const Eigen::Vector3f &translation);
+    void translateCamera(const Vec3f &translation);
     // (Right | Up | Forward )
-    void translateCameraRelative(const Eigen::Vector3f &translation);
+    void translateCameraRelative(const Vec3f &translation);
     void handleUserInput();
 
     void generateSettings() override;
     void generateDebugInformation() override;
 
     [[nodiscard]] std::string getTitle() const override;
-    [[nodiscard]] Eigen::Vector2f getWindowSize() const;
+    [[nodiscard]] Vec2f getWindowSize() const;
     [[nodiscard]] FeatureBuffer *getFeatureBuffer() const;
 
 private:
@@ -110,7 +110,7 @@ private:
 template<typename F, BUFFERTYPE B>
 class BufferVisualizer : public Renderable {
 public:
-    BufferVisualizer(Statistic<Eigen::Vector3f> *stat, std::string title, unsigned int width, unsigned int height, F f);
+    BufferVisualizer(Statistic<Vec3f> *stat, std::string title, unsigned int width, unsigned int height, F f);
 
     ~BufferVisualizer() override;
 
@@ -123,7 +123,7 @@ public:
 private:
     void render() override;
 
-    const Statistic<Eigen::Vector3f> *stat;
+    const Statistic<Vec3f> *stat;
     Eigen::Vector2<unsigned int> size;
     std::string title;
     GLuint texture{};
@@ -159,7 +159,7 @@ private:
 
 
 template<typename F, BUFFERTYPE B>
-BufferVisualizer<F, B>::BufferVisualizer(Statistic<Eigen::Vector3f> *stat, std::string title, unsigned int width, unsigned int height, F f)
+BufferVisualizer<F, B>::BufferVisualizer(Statistic<Vec3f> *stat, std::string title, unsigned int width, unsigned int height, F f)
     : stat(stat), size(width, height), title(std::move(title)), f(f) {
 
 
@@ -246,7 +246,7 @@ void BufferVisualizer<F, B>::render() {
 
 
 template<BUFFERTYPE B>
-__global__ void renderBuffer(const Statistic<Eigen::Vector3f> *stat, cudaSurfaceObject_t surface, int width, int height, auto f) {
+__global__ void renderBuffer(const Statistic<Vec3f> *stat, cudaSurfaceObject_t surface, int width, int height, auto f) {
 
     size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -255,13 +255,13 @@ __global__ void renderBuffer(const Statistic<Eigen::Vector3f> *stat, cudaSurface
     size_t x = width - 1 - pixelIndex % width, y = pixelIndex / width;
 
 
-    auto color = [&]() -> Eigen::Vector3f {
+    auto color = [&]() -> Vec3f {
         if constexpr(B == BUFFERTYPE::MEAN) return f(stat[pixelIndex].getMean());
         if constexpr(B == BUFFERTYPE::VARIANCE) return f(stat[pixelIndex].getVariance());
         if constexpr(B == BUFFERTYPE::SAMPLEVARIANCE) return f(stat[pixelIndex].getSampleVariance());
-        if constexpr(B == BUFFERTYPE::NUM_ELEMENTS) return f(Eigen::Vector3f{float(stat[pixelIndex].getNumElements()), float(stat[pixelIndex].getNumElements()), float(stat[pixelIndex].getNumElements())});
+        if constexpr(B == BUFFERTYPE::NUM_ELEMENTS) return f(Vec3f{float(stat[pixelIndex].getNumElements()), float(stat[pixelIndex].getNumElements()), float(stat[pixelIndex].getNumElements())});
         else
-            return Eigen::Vector3f{-1, -1, -1};
+            return Vec3f{-1, -1, -1};
     }();
 
     uchar4 color4 = make_uchar4(color[0] * 255,

@@ -15,12 +15,13 @@ void checkCudaErrors(cudaError result) {
 }
 
 
-__host__ __device__ int safe_uint_to_int(unsigned int i) {
+CPU_GPU int safe_uint_to_int(unsigned int i) {
     if(i > static_cast<unsigned int>(std::numeric_limits<int>::max())) {
         // If we compile in debug, throw an assertion
         // Otherwise, clamp to int max
 #ifndef NDEBUG
-        assert(!"Unsigned int cannot be converted to int");
+        printf("Trying to convert %u to unsigned int, but value is too large.\n", i);
+        assert(false);
 #else
         return std::numeric_limits<int>::max();
 #endif

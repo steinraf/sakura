@@ -39,8 +39,8 @@ struct AccelerationNode {
             AccelerationNode *left;
             AccelerationNode *right;
         };
-        __host__ __device__ explicit Child(Triangle *triangle) : triangle(triangle) {}
-        __host__ __device__ explicit Child(AccelerationNode *left, AccelerationNode *right)
+        CPU_GPU explicit Child(Triangle *triangle) : triangle(triangle) {}
+        CPU_GPU explicit Child(AccelerationNode *left, AccelerationNode *right)
             : left(left), right(right) {}
     } child;
 
@@ -89,11 +89,12 @@ public:
             const Ray &ray, Intersection &its,
             bool isShadowRay = false) const noexcept;
 
-    [[nodiscard]] __host__ __device__ AABB getBoundingBox() const noexcept;
+    [[nodiscard]] CPU_GPU AABB getBoundingBox() const noexcept;
 
-    [[nodiscard]] __host__ __device__ float getArea() const noexcept;
+    [[nodiscard]] CPU_GPU float getArea() const noexcept;
 
-    [[nodiscard]] __host__ __device__ Triangle *sampleTriangle(float rng) const noexcept;
+    [[nodiscard]] CPU_GPU Triangle *sampleTriangle(float rng) const noexcept;
+    bool intersectAABB(Ray ray, Intersection &intersection);
 };
 
 // The findSplit, delta and determineRange are taken from here

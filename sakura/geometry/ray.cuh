@@ -7,18 +7,20 @@
 #include <Eigen/Dense>
 #include <cuda/std/limits>
 
+#include "../common.cuh"
+
 __device__ constexpr float RAY_EPSILON = 0.0001f;
 
 struct Ray {
-    __host__ __device__ Ray(Eigen::Vector3f origin, Eigen::Vector3f dir,
-                            float minDist = RAY_EPSILON, float maxDist = cuda::std::numeric_limits<float>::infinity()) noexcept;
+    CPU_GPU Ray(Vec3f origin, Vec3f dir,
+                float minDist = RAY_EPSILON, float maxDist = cuda::std::numeric_limits<float>::infinity()) noexcept;
 
-    [[nodiscard]] __host__ __device__ Eigen::Vector3f at(float t) const noexcept;
+    [[nodiscard]] CPU_GPU Vec3f at(float t) const noexcept;
 
-    __host__ __device__ void transform(const Eigen::Affine3f &transform) noexcept;
+    CPU_GPU void transform(const Eigen::Affine3f &transform) noexcept;
 
 
-    Eigen::Vector3f origin;
-    Eigen::Vector3f dir;// Not necessarily unit vector (https://pbr-book.org/4ed/Shapes/Basic_Shape_Interface#IntersectionCoordinateSpaces)
+    Vec3f origin;
+    Vec3f dir;// Not necessarily unit vector (https://pbr-book.org/4ed/Shapes/Basic_Shape_Interface#IntersectionCoordinateSpaces)
     float minDist, maxDist;
 };

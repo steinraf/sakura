@@ -22,7 +22,8 @@ struct Film;
 class Frame;
 struct Intersection;
 class Material;
-class Ray;
+class Normal3f;
+struct Ray;
 class Renderable;
 class Sampler;
 struct Sensor;
@@ -35,12 +36,13 @@ class Triangle;
 
 using Vec2f = Eigen::Vector2f;
 using Vec3f = Eigen::Vector3f;
-using Color = Eigen::Vector3f;
+using Color = Vec3f;
 
+#define CPU_GPU __host__ __device__
 
 void checkCudaErrors(cudaError result);
 
-__host__ __device__ int safe_uint_to_int(unsigned int i);
+CPU_GPU int safe_uint_to_int(unsigned int i);
 
 template<typename T>
 concept StatType = std::is_floating_point_v<T> || std::is_same_v<T, Vec3f>;
@@ -48,14 +50,14 @@ concept StatType = std::is_floating_point_v<T> || std::is_same_v<T, Vec3f>;
 template<StatType T>
 class Statistic {
 public:
-    __host__ __device__ Statistic() : numElements(0), mean(getZero()), variance(getZero()) {}
-    __host__ __device__ Statistic(const Statistic<T> &other) = default;
-    __host__ __device__ Statistic(Statistic<T> &&other) = default;
-    __host__ __device__ Statistic &operator=(const Statistic<T> &other) = default;
-    __host__ __device__ ~Statistic() = default;
+    CPU_GPU Statistic() : numElements(0), mean(getZero()), variance(getZero()) {}
+    CPU_GPU Statistic(const Statistic<T> &other) = default;
+    CPU_GPU Statistic(Statistic<T> &&other) = default;
+    CPU_GPU Statistic &operator=(const Statistic<T> &other) = default;
+    CPU_GPU ~Statistic() = default;
 
     // Welford's online algorithm to incrementally calculate variance
-    __host__ __device__ void addElement(T element) {
+    CPU_GPU void addElement(T element) {
         numElements++;
         T delta = element - mean;
         mean += delta / numElements;
@@ -66,44 +68,44 @@ public:
         }
     }
 
-    [[nodiscard]] __host__ __device__ T getMean() const {
+    [[nodiscard]] CPU_GPU T getMean() const {
         return mean;
     }
 
-    [[nodiscard]] __host__ __device__ T getVariance() const {
+    [[nodiscard]] CPU_GPU T getVariance() const {
         if(numElements == 0) {
             return getZero();
         }
         return variance / numElements;
     }
 
-    [[nodiscard]] __host__ __device__ T getSampleVariance() const {
+    [[nodiscard]] CPU_GPU T getSampleVariance() const {
         if(numElements <= 1) {
             return getZero();
         }
         return variance / (numElements - 1);
     }
 
-    [[nodiscard]] __host__ __device__ size_t getNumElements() const {
+    [[nodiscard]] CPU_GPU size_t getNumElements() const {
         return numElements;
     }
 
-    __host__ __device__ void clear() {
+    CPU_GPU void clear() {
         numElements = 0;
         mean = getZero();
         variance = getZero();
     }
 
-    __host__ __device__ void scale(float factor) {
+    CPU_GPU void scale(float factor) {
         numElements *= factor;
     }
 
 private:
-    __host__ __device__ T getZero() const {
+    CPU_GPU T getZero() const {
         if constexpr(std::is_same_v<T, Vec3f>) {
             return Vec3f::Zero();
         } else {
-            return T();
+            return T(0);
         }
     }
 

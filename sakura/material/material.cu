@@ -8,9 +8,8 @@
 #include "../texture/texture.cuh"
 #include "bsdf.cuh"
 
-__host__ __device__ Color Material::eval(const Texture &texture, const BSDFQueryRecord &bsdfQueryRecord) const noexcept {
+CPU_GPU Color Material::eval(const Texture &texture, const BSDFQueryRecord &bsdfQueryRecord) const noexcept {
 
-    Vec3f halfway = (bsdfQueryRecord.wIn + bsdfQueryRecord.wOut).normalized();
 
     switch(type) {
         case MaterialType::DIFFUSE:
@@ -22,14 +21,17 @@ __host__ __device__ Color Material::eval(const Texture &texture, const BSDFQuery
         case MaterialType::DIELECTRIC:
             return {0.0f, 0.0f, 0.0f};
         case MaterialType::MICROFACET:
-            return microfacet.kd * M_1_PIf + Vec3f::Constant(microfacet.ks * evalBeckmann(halfway) * fresnel(halfway.dot(bsdfQueryRecord.wIn), microfacet.exterior, microfacet.interior) * smithBeckmannG1(bsdfQueryRecord.wIn, halfway) * smithBeckmannG1(bsdfQueryRecord.wOut, halfway) / (4.f * Frame::cosTheta(bsdfQueryRecord.wIn) * Frame::cosTheta(bsdfQueryRecord.wOut)));
+            return [&]() -> Color {
+                Vec3f halfway = (bsdfQueryRecord.wIn + bsdfQueryRecord.wOut).normalized();
+                return microfacet.kd * M_1_PIf + Vec3f::Constant(microfacet.ks * evalBeckmann(halfway) * fresnel(halfway.dot(bsdfQueryRecord.wIn), microfacet.exterior, microfacet.interior) * smithBeckmannG1(bsdfQueryRecord.wIn, halfway) * smithBeckmannG1(bsdfQueryRecord.wOut, halfway) / (4.f * Frame::cosTheta(bsdfQueryRecord.wIn) * Frame::cosTheta(bsdfQueryRecord.wOut)));
+            }();
         default:
             assert(false);
             return {0.0f, 0.0f, 0.0f};
     }
 }
-__host__ __device__ float Material::pdf(const BSDFQueryRecord &bsdfQueryRecord) const noexcept {
-    const Vec3f halfway = (bsdfQueryRecord.wIn + bsdfQueryRecord.wOut).normalized();
+CPU_GPU float Material::pdf(const BSDFQueryRecord &bsdfQueryRecord) const noexcept {
+
     switch(type) {
         case MaterialType::DIFFUSE:
             if(bsdfQueryRecord.measure != EMeasure::EDiscrete || Frame::cosTheta(bsdfQueryRecord.wIn) <= 0 || Frame::cosTheta(bsdfQueryRecord.wOut) <= 0)
@@ -43,14 +45,17 @@ __host__ __device__ float Material::pdf(const BSDFQueryRecord &bsdfQueryRecord) 
         case MaterialType::MICROFACET:
             if(Frame::cosTheta(bsdfQueryRecord.wOut) <= 0)
                 return 0.0f;
-            return microfacet.ks * evalBeckmann(halfway) * Frame::cosTheta(halfway) / (4.f * halfway.dot(bsdfQueryRecord.wOut)) + (1.f - microfacet.ks) * Frame::cosTheta(bsdfQueryRecord.wOut) * M_1_PIf;
+            return [&]() {
+                const Vec3f halfway = (bsdfQueryRecord.wIn + bsdfQueryRecord.wOut).normalized();
+                return microfacet.ks * evalBeckmann(halfway) * Frame::cosTheta(halfway) / (4.f * halfway.dot(bsdfQueryRecord.wOut)) + (1.f - microfacet.ks) * Frame::cosTheta(bsdfQueryRecord.wOut) * M_1_PIf;
+            }();
 
         default:
             assert(false);
             return 0.0f;
     }
 }
-__host__ __device__ float Material::evalBeckmann(const Vec3f &n) const {
+CPU_GPU float Material::evalBeckmann(const Vec3f &n) const {
     assert(type == MaterialType::MICROFACET);
     float ct = Frame::cosTheta(n),
           ct2 = ct * ct,
@@ -58,7 +63,7 @@ __host__ __device__ float Material::evalBeckmann(const Vec3f &n) const {
     return expf(-k * k) / (M_PIf * microfacet.alpha * microfacet.alpha * ct2 * ct2);
 }
 
-__host__ __device__ float Material::smithBeckmannG1(const Vec3f &v, const Vec3f &n) const {
+CPU_GPU float Material::smithBeckmannG1(const Vec3f &v, const Vec3f &n) const {
     assert(type == MaterialType::MICROFACET);
     float tanTheta = Frame::tanTheta(v);
 
@@ -75,7 +80,7 @@ __host__ __device__ float Material::smithBeckmannG1(const Vec3f &v, const Vec3f 
 
     return (3.535f * a + 2.181f * a2) / (1.0f + 2.276f * a + 2.577f * a2);
 }
-__host__ __device__ float Material::fresnel(float cosTheta, float extIOR, float intIOR) {
+CPU_GPU float Material::fresnel(float cosTheta, float extIOR, float intIOR) {
     // Nori fresnel
     float etaI = extIOR, etaT = intIOR;
 
@@ -104,7 +109,7 @@ __host__ __device__ float Material::fresnel(float cosTheta, float extIOR, float 
 
     return (Rs * Rs + Rp * Rp) / 2.0f;
 }
-__host__ __device__ Material::Material(const Material &other) : type(other.type) {
+CPU_GPU Material::Material(const Material &other) : type(other.type) {
     switch(type) {
         case MaterialType::DIFFUSE:
         case MaterialType::SPECULAR:
@@ -119,7 +124,7 @@ __host__ __device__ Material::Material(const Material &other) : type(other.type)
             assert(false);
     }
 }
-__host__ __device__ Material &Material::operator=(const Material &other) {
+CPU_GPU Material &Material::operator=(const Material &other) {
     type = other.type;
     switch(type) {
         case MaterialType::DIFFUSE:

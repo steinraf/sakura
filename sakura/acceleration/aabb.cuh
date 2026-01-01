@@ -13,27 +13,27 @@
 
 // Axis Aligned Bounding Box
 struct AABB {
-    Eigen::Vector3f min, max;
+    Vec3f min, max;
 
-    __host__ __device__ AABB() noexcept;
+    CPU_GPU AABB() noexcept;
 
-    __host__ __device__ AABB(Eigen::Vector3f min, Eigen::Vector3f max) noexcept;
+    CPU_GPU AABB(Vec3f min, Vec3f max) noexcept;
 
-    __host__ __device__ AABB(const Eigen::Vector3f &p0,
-                             const Eigen::Vector3f &p1,
-                             const Eigen::Vector3f &p2) noexcept;
+    CPU_GPU AABB(const Vec3f &p0,
+                 const Vec3f &p1,
+                 const Vec3f &p2) noexcept;
 
-    [[nodiscard]] __host__ __device__ bool intersect(
+    [[nodiscard]] CPU_GPU bool intersect(
             const Ray &ray) const noexcept;
 
-    [[nodiscard]] __host__ __device__ AABB
+    [[nodiscard]] CPU_GPU AABB
     operator+(const AABB &other) const noexcept;
 
-    [[nodiscard]] __host__ __device__ Eigen::Vector3f getCenter()
+    [[nodiscard]] CPU_GPU Vec3f getCenter()
             const noexcept {
         return (min + max) / 2;
     }
 
     // TODO handle degenerate AABBs where one dimension has width 0
-    [[nodiscard]] __host__ __device__ bool isFaulty() const noexcept;
+    [[nodiscard]] CPU_GPU bool isFaulty() const noexcept;
 };

@@ -11,13 +11,13 @@
 
 class Camera {
 public:
-    __host__ __device__ Camera() noexcept;
-    __host__ __device__ Camera(Eigen::Isometry3f tf, float fov,
-                               float aspectRatio, float aperture,
-                               float focusDist, float near = 0.1f,
-                               float far = 10000.0f) noexcept;
+    CPU_GPU Camera() noexcept;
+    CPU_GPU Camera(Eigen::Isometry3f tf, float fov,
+                   float aspectRatio, float aperture,
+                   float focusDist, float near = 0.1f,
+                   float far = 10000.0f) noexcept;
 
-    __host__ __device__ static Eigen::Isometry3f lookAt(const Eigen::Vector3f &center, const Eigen::Vector3f &lookAt, const Eigen::Vector3f &up);
+    CPU_GPU static Eigen::Isometry3f lookAt(const Vec3f &center, const Vec3f &lookAt, const Vec3f &up);
 
     // Takes in screen-space coordinates u, v and sampler
     // returns ray originating from the camera
@@ -25,15 +25,15 @@ public:
 
     __host__ void createTranslationSlider();
 
-    __host__ __device__ void translate(const Eigen::Vector3f &x);
-    __host__ __device__ void relativeTranslate(const Eigen::Vector3f &x);
+    CPU_GPU void translate(const Vec3f &x);
+    CPU_GPU void relativeTranslate(const Vec3f &x);
 
-    __host__ __device__ void updateFOV(float fov);
-    __host__ __device__ void updateLensRadius(float aperture);
+    CPU_GPU void updateFOV(float fov);
+    CPU_GPU void updateLensRadius(float aperture);
 
     float focusDist;
 
-    __host__ __device__ void setFocusPlane(const Vec3f &point);
+    CPU_GPU void setFocusPlane(const Vec3f &point);
 
 private:
     Eigen::Isometry3f cameraTransform;
@@ -42,8 +42,8 @@ private:
     float near, far;
     float lensRadius;
     float aspectRatio;
-    __host__ __device__ void generateSampleToCameraMatrix();
-    __host__ __device__ void setK(float fov);
+    CPU_GPU void generateSampleToCameraMatrix();
+    CPU_GPU void setK(float fov);
 };
 
 class CameraBuilder {

@@ -31,20 +31,20 @@ __global__ void mas(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
         Sampler sampler{&rngStates[pixelIndex]};
 
 
-        auto screenPos = Eigen::Vector3f{u, v, 0.0f};
+        auto screenPos = Vec3f{u, v, 0.0f};
 
-        const Eigen::Vector3f backgroundColor =
-                0.0f * Eigen::Vector3f{1.0, 1.0, 1.0};
+        const Vec3f backgroundColor =
+                0.0f * Vec3f{1.0, 1.0, 1.0};
 
-        Eigen::Vector3f totalColor{0.0, 0.0, 0.0};
+        Vec3f totalColor{0.0, 0.0, 0.0};
 
         for(int sample = 0; sample < spp; ++sample) {
 
 
             Intersection intersection;
             Ray currentRay = camera.getRay(u, v, sampler);
-            auto color = Eigen::Vector3f{0.0, 0.0, 0.0};
-            auto t = Eigen::Vector3f{1.0, 1.0, 1.0};
+            auto color = Vec3f{0.0, 0.0, 0.0};
+            auto t = Vec3f{1.0, 1.0, 1.0};
             float etaScale = 1.0;// TODO Changes to Russian Roulette due to
                                  // indices of refraction
 
@@ -55,10 +55,10 @@ __global__ void mas(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
 
                     color.array() += t.array() * envmap.eval(currentRay).array();
                     if(numBounces == 0) {
-                        buffer->normal[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
-                        buffer->position[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
-                        buffer->albedo[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
-                        buffer->uv[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
+                        buffer->normal[pixelIndex].addElement(Vec3f{0.0, 0.0, 0.0});
+                        buffer->position[pixelIndex].addElement(Vec3f{0.0, 0.0, 0.0});
+                        buffer->albedo[pixelIndex].addElement(Vec3f{0.0, 0.0, 0.0});
+                        buffer->uv[pixelIndex].addElement(Vec3f{0.0, 0.0, 0.0});
                     }
                     break;
                 } else if(numBounces == 0) {
@@ -71,7 +71,7 @@ __global__ void mas(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
                     buffer->normal[pixelIndex].addElement(intersection.shFrame.n);
                     buffer->position[pixelIndex].addElement(intersection.point);
                     buffer->albedo[pixelIndex].addElement(bsdfSample);
-                    buffer->uv[pixelIndex].addElement(Eigen::Vector3f{intersection.uv[0], intersection.uv[1], 0.0});
+                    buffer->uv[pixelIndex].addElement(Vec3f{intersection.uv[0], intersection.uv[1], 0.0});
                 }
 
                 constexpr int maxEnvSamples = 0;
@@ -138,12 +138,61 @@ __global__ void mas(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
     }
 }
 
+__global__ void bvhDebugger(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
+                            Camera camera, curandState *rngStates,
+                            unsigned int width, unsigned int height, int spp) {
+
+    for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
+        pixelIndex < width * height; pixelIndex += blockDim.x * gridDim.x) {
+        size_t x = pixelIndex % width, y = pixelIndex / width;
+
+        const float u = float(x) / float(width);
+        const float v = float(y) / float(height);
+
+        Sampler sampler{&rngStates[pixelIndex]};
+
+        EmitterQueryRecord eqr{camera.getRay(u, v, sampler).origin};
+
+        auto screenPos = Vec3f{u, v, 0.0f};
+
+        Vec3f totalColor{0.0, 0.0, 0.0};
+
+        for(int sample = 0; sample < spp; ++sample) {
+
+
+            Ray currentRay = camera.getRay(u, v, sampler);
+            auto color = Vec3f{0.0, 0.0, 0.0};
+
+            Intersection its;
+
+            if(!tlas->intersect(currentRay, its)) {
+                color.array() = envmap.eval(currentRay).array();
+            } else {
+                if(its.triangle) {
+                    color.array() = Vec3f{its.uv[0], its.uv[1], 0.5};
+                } else {
+                    color.array() = Color::Ones();
+                }
+            }
+
+            totalColor += color;
+        }
+
+
+        totalColor /= float(spp);
+
+
+        buffer->color[pixelIndex].addElement(totalColor);
+    }
+}
+
+
 __global__ void mis(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
                     Camera camera, curandState *rngStates,
                     unsigned int width, unsigned int height, int spp) {
 
 
-    constexpr int maxBounces = 16;
+    constexpr int maxBounces = 4;
 
 
     for(size_t pixelIndex = blockIdx.x * blockDim.x + threadIdx.x;
@@ -180,12 +229,12 @@ __global__ void mis(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
         //
         //        continue;
 
-        auto screenPos = Eigen::Vector3f{u, v, 0.0f};
+        auto screenPos = Vec3f{u, v, 0.0f};
 
-        const Eigen::Vector3f backgroundColor =
-                0.0f * Eigen::Vector3f{1.0, 1.0, 1.0};
+        const Vec3f backgroundColor =
+                0.0f * Vec3f{1.0, 1.0, 1.0};
 
-        Eigen::Vector3f totalColor{0.0, 0.0, 0.0};
+        Vec3f totalColor{0.0, 0.0, 0.0};
 
         float wMat = 1.0f;
 
@@ -194,8 +243,8 @@ __global__ void mis(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
 
             Intersection intersection;
             Ray currentRay = camera.getRay(u, v, sampler);
-            auto color = Eigen::Vector3f{0.0, 0.0, 0.0};
-            auto t = Eigen::Vector3f{1.0, 1.0, 1.0};
+            auto color = Vec3f{0.0, 0.0, 0.0};
+            auto t = Vec3f{1.0, 1.0, 1.0};
             float etaScale = 1.0;// TODO Changes to Russian Roulette due to
                                  // indices of refraction
 
@@ -206,10 +255,10 @@ __global__ void mis(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
 
                     color.array() += t.array() * envmap.eval(currentRay).array();
                     if(numBounces == 0) {
-                        buffer->normal[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
-                        buffer->position[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
-                        buffer->albedo[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
-                        buffer->uv[pixelIndex].addElement(Eigen::Vector3f{0.0, 0.0, 0.0});
+                        buffer->normal[pixelIndex].addElement(Vec3f{0.0, 0.0, 0.0});
+                        buffer->position[pixelIndex].addElement(Vec3f{0.0, 0.0, 0.0});
+                        buffer->albedo[pixelIndex].addElement(Vec3f{0.0, 0.0, 0.0});
+                        buffer->uv[pixelIndex].addElement(Vec3f{0.0, 0.0, 0.0});
                     }
                     break;
                 } else if(numBounces == 0) {
@@ -222,7 +271,7 @@ __global__ void mis(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
                     buffer->normal[pixelIndex].addElement(intersection.shFrame.n);
                     buffer->position[pixelIndex].addElement(intersection.point);
                     buffer->albedo[pixelIndex].addElement(bsdfSample);
-                    buffer->uv[pixelIndex].addElement(Eigen::Vector3f{intersection.uv[0], intersection.uv[1], 0.0});
+                    buffer->uv[pixelIndex].addElement(Vec3f{intersection.uv[0], intersection.uv[1], 0.0});
                 }
 
                 if(tlas->containsEmitters()) {
@@ -287,7 +336,7 @@ __global__ void mis(TLAS *tlas, Texture envmap, FeatureBuffer *buffer,
 
                 if(intersection.isEmitter()) {
                     color.array() += t.array() * wMat * intersection.emitter->eval({currentRay.origin, intersection.point, intersection.shFrame.n, intersection.uv}).array();
-                    break;// assumes all emitters are perfect black bodies
+                    //                    break;// assumes all emitters are perfect black bodies
                 }
 
 
@@ -367,7 +416,7 @@ __global__ void bufferToSurface(cudaSurfaceObject_t surface, FeatureBuffer *buff
 }
 
 
-__device__ Eigen::Vector3f tonemap(Eigen::Vector3f color) {
+__device__ Vec3f tonemap(Vec3f color) {
 
     auto gammaCorrect = [] __device__(float x) {
         auto clamp = [] __device__(float x, float min, float max) {

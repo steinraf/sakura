@@ -117,27 +117,27 @@
             <rgb name="reflectance" value="0.531049, 0.531049, 0.531049"/>
         </bsdf>
     </bsdf>
-    <shape type="obj" id="BlackRubber_0001">
-        <string name="filename" value="models/Mesh032.obj"/>
-        <transform name="to_world">
-            <matrix value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
-        </transform>
-        <ref id="BlackRubberBSDF"/>
-    </shape>
-    <shape type="obj" id="WhiteRubber_0001">
-        <string name="filename" value="models/Mesh025.obj"/>
-        <transform name="to_world">
-            <matrix value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
-        </transform>
-        <ref id="WhiteRubberBSDF"/>
-    </shape>
-    <shape type="obj" id="Chrome_0001">
-        <string name="filename" value="models/Mesh031.obj"/>
-        <transform name="to_world">
-            <matrix value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
-        </transform>
-        <ref id="ChromeBSDF"/>
-    </shape>
+    <!--    <shape type="obj" id="BlackRubber_0001">-->
+    <!--        <string name="filename" value="models/Mesh032.obj"/>-->
+    <!--        <transform name="to_world">-->
+    <!--            <matrix value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>-->
+    <!--        </transform>-->
+    <!--        <ref id="BlackRubberBSDF"/>-->
+    <!--    </shape>-->
+    <!--    <shape type="obj" id="WhiteRubber_0001">-->
+    <!--        <string name="filename" value="models/Mesh025.obj"/>-->
+    <!--        <transform name="to_world">-->
+    <!--            <matrix value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>-->
+    <!--        </transform>-->
+    <!--        <ref id="WhiteRubberBSDF"/>-->
+    <!--    </shape>-->
+    <!--    <shape type="obj" id="Chrome_0001">-->
+    <!--        <string name="filename" value="models/Mesh031.obj"/>-->
+    <!--        <transform name="to_world">-->
+    <!--            <matrix value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>-->
+    <!--        </transform>-->
+    <!--        <ref id="ChromeBSDF"/>-->
+    <!--    </shape>-->
     <shape type="obj" id="Chrome_0002">
         <string name="filename" value="models/Mesh022.obj"/>
         <transform name="to_world">

@@ -180,7 +180,7 @@ private:
     void xmlChildIterator(const pugi::xml_node &node, auto func) const;
 
     Eigen::Isometry3f parseTransform(const pugi::xml_node &node, auto logger) const;
-    static Eigen::Vector3f parseVector(std::string str);
+    static Vec3f parseVector(std::string str);
 
     [[nodiscard]] std::string lookupName(const std::string &name) const;
     std::unordered_map<std::string, std::string> nameMap;

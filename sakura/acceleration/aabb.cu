@@ -7,7 +7,7 @@
 #include "../geometry/ray.cuh"
 #include "aabb.cuh"
 
-__host__ __device__ AABB::AABB() noexcept
+CPU_GPU AABB::AABB() noexcept
     : min{cuda::std::numeric_limits<float>::max(),
           cuda::std::numeric_limits<float>::max(),
           cuda::std::numeric_limits<float>::max()},
@@ -15,27 +15,28 @@ __host__ __device__ AABB::AABB() noexcept
           cuda::std::numeric_limits<float>::lowest(),
           cuda::std::numeric_limits<float>::lowest()} {}
 
-__host__ __device__ AABB::AABB(Eigen::Vector3f min,
-                               Eigen::Vector3f max) noexcept
+CPU_GPU AABB::AABB(Vec3f min,
+                   Vec3f max) noexcept
     : min{std::move(min)}, max{std::move(max)} {
 #ifndef NDEBUG
     if(isFaulty()) {
-        printf("AABB IS EMPTY (%f %f %f %f %f %f)\n", this->min.x(), this->min.y(), this->min.z(),
+        printf("AABB IS EMPTY (%f %f %f %f %f %f)\n",
+               this->min.x(), this->min.y(), this->min.z(),
                this->max.x(), this->max.y(), this->max.z());
         assert(!"EmptyAABB CONSTRUCTED");
     }
 #endif
 }
 
-__host__ __device__ AABB::AABB(const Eigen::Vector3f &p0,
-                               const Eigen::Vector3f &p1,
-                               const Eigen::Vector3f &p2) noexcept
-    : min{thrust::min(thrust::min(p0.x(), p1.x()), p2.x()),
-          thrust::min(thrust::min(p0.y(), p1.y()), p2.y()),
-          thrust::min(thrust::min(p0.z(), p1.z()), p2.z())},
-      max{thrust::max(thrust::max(p0.x(), p1.x()), p2.x()),
-          thrust::max(thrust::max(p0.y(), p1.y()), p2.y()),
-          thrust::max(thrust::max(p0.z(), p1.z()), p2.z())} {
+CPU_GPU AABB::AABB(const Vec3f &p0,
+                   const Vec3f &p1,
+                   const Vec3f &p2) noexcept
+    : min{std::min({p0.x(), p1.x(), p2.x()}),
+          std::min({p0.y(), p1.y(), p2.y()}),
+          std::min({p0.z(), p1.z(), p2.z()})},
+      max{std::max({p0.x(), p1.x(), p2.x()}),
+          std::max({p0.y(), p1.y(), p2.y()}),
+          std::max({p0.z(), p1.z(), p2.z()})} {
 #ifndef NDEBUG
     if(isFaulty()) {
         printf("AABB IS EMPTY (%f %f %f %f %f %f)\n", min.x(), min.y(), min.z(),
@@ -46,7 +47,7 @@ __host__ __device__ AABB::AABB(const Eigen::Vector3f &p0,
 #endif
 }
 
-[[nodiscard]] __host__ __device__ bool AABB::intersect(
+[[nodiscard]] CPU_GPU bool AABB::intersect(
         const Ray &ray) const noexcept {
     float nearT = cuda::std::numeric_limits<float>::lowest();
     float farT = cuda::std::numeric_limits<float>::max();
@@ -76,14 +77,14 @@ __host__ __device__ AABB::AABB(const Eigen::Vector3f &p0,
 }
 
 // TODO check if adding -+ Epsilon to bounds is necessary
-[[nodiscard]] __host__ __device__ AABB
+[[nodiscard]] CPU_GPU AABB
 AABB::operator+(const AABB &other) const noexcept {
-    auto out = AABB{Eigen::Vector3f{thrust::min(min.x(), other.min.x()),
-                                    thrust::min(min.y(), other.min.y()),
-                                    thrust::min(min.z(), other.min.z())},
-                    Eigen::Vector3f{thrust::max(max.x(), other.max.x()),
-                                    thrust::max(max.y(), other.max.y()),
-                                    thrust::max(max.z(), other.max.z())}};
+    auto out = AABB{Vec3f{thrust::min(min.x(), other.min.x()),
+                          thrust::min(min.y(), other.min.y()),
+                          thrust::min(min.z(), other.min.z())},
+                    Vec3f{thrust::max(max.x(), other.max.x()),
+                          thrust::max(max.y(), other.max.y()),
+                          thrust::max(max.z(), other.max.z())}};
 #ifndef NDEBUG
     if(out.isFaulty()) {
         printf(
@@ -99,7 +100,7 @@ AABB::operator+(const AABB &other) const noexcept {
 #endif
     return out;
 }
-__host__ __device__ bool AABB::isFaulty() const noexcept {
+CPU_GPU bool AABB::isFaulty() const noexcept {
 
     const auto diff = max - min;
 

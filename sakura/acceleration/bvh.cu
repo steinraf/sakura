@@ -60,6 +60,33 @@ __device__ __host__ BVH::BVH(Triangle *triangles,
 
 [[nodiscard]] __device__ bool BVH::intersect(const Ray &ray, Intersection &its,
                                              bool isShadowRay) const noexcept {
+
+    //    Ray currentRay = ray;
+    //    if(!root->boundingBox.intersect(currentRay)) {
+    //        return false;
+    //    }
+    //
+    //    const Triangle *closestTriangle = nullptr;
+    //    AccelerationNode *currentNode = root;
+    //
+    //    for(int i = 0; i < numTriangles; ++i) {
+    //        const Triangle *tria = triangleBuffer + i;
+    //        if(tria->intersectHandler(currentRay, its)) {
+    //            if(isShadowRay) {
+    //                return true;
+    //            }
+    //            closestTriangle = const_cast<Triangle *>(tria);
+    //            currentRay.maxDist = its.t;
+    //        }
+    //    }
+    //
+    //    if(closestTriangle == nullptr) return false;
+    //
+    //    closestTriangle->hitInformationSetter(currentRay, its);
+    //
+    //    return true;
+
+
     Ray currentRay = ray;
     if(!root->boundingBox.intersect(currentRay)) {
         return false;
@@ -118,17 +145,73 @@ __device__ __host__ BVH::BVH(Triangle *triangles,
 
     return true;
 }
-__host__ __device__ AABB BVH::getBoundingBox() const noexcept {
+CPU_GPU AABB BVH::getBoundingBox() const noexcept {
     return boundingBox;
 }
-__host__ __device__ float BVH::getArea() const noexcept {
+CPU_GPU float BVH::getArea() const noexcept {
     return surfaceArea;
 }
-__host__ __device__ Triangle *BVH::sampleTriangle(float rng) const noexcept {
+CPU_GPU Triangle *BVH::sampleTriangle(float rng) const noexcept {
     assert(0 <= rng and rng <= 1);
     const size_t idx = sample::sampleCDF(rng, cdf, numTriangles);
     assert(idx < numTriangles);
     return triangleBuffer + idx;
+}
+bool BVH::intersectAABB(Ray ray, Intersection &its) {
+    Ray currentRay = ray;
+    if(!root->boundingBox.intersect(currentRay)) {
+        return false;
+    }
+
+    constexpr int stackSize = 64;
+    AccelerationNode *stack[stackSize];
+    int stackIdx = 0;
+#ifndef NDEBUG
+    int maxStackSize = 0;
+#endif
+    Triangle *closestTriangle = nullptr;
+    AccelerationNode *currentNode = root;
+
+    do {
+        assert(stackIdx < stackSize);
+
+        if(currentNode->isLeaf) {
+            if(currentNode->getTriangle()->intersectHandler(currentRay, its)) {
+                closestTriangle = currentNode->getTriangle();
+                currentRay.maxDist = its.t;
+            }
+            currentNode = stack[--stackIdx];// Pop
+        } else {
+            assert(currentNode->getLeft() != nullptr &&
+                   currentNode->getRight() != nullptr);
+            AccelerationNode *left = currentNode->getLeft();
+            AccelerationNode *right = currentNode->getRight();
+
+            bool continueLeft = left->boundingBox.intersect(currentRay);
+            bool continueRight = right->boundingBox.intersect(currentRay);
+
+            if(!continueLeft && !continueRight) {
+                currentNode = stack[--stackIdx];// Pop
+            } else {
+                currentNode = continueLeft ? left : right;
+                if(continueLeft) {
+                    stack[stackIdx++] = right;// Push
+#ifndef NDEBUG
+                    if(stackIdx > maxStackSize) {
+                        maxStackSize = stackIdx;
+                    }
+#endif
+                }
+            }
+        }
+
+    } while(stackIdx >= 0);
+
+    if(closestTriangle == nullptr) return false;
+
+    closestTriangle->hitInformationSetter(currentRay, its);
+
+    return true;
 }
 
 
@@ -316,16 +399,17 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
                                triangles.size() * sizeof(Triangle),
                                cudaMemcpyHostToDevice));
 
+
     float totalArea = thrust::transform_reduce(
             thrust::device, trias, trias + triangles.size(),
-            [=] __host__ __device__(const Triangle &t) -> float {
+            [=] CPU_GPU(const Triangle &t) -> float {
                 return t.getArea();
             },
             0.f, thrust::plus<float>());
 
     AABB boundingBox = thrust::transform_reduce(
             thrust::device, trias, trias + triangles.size(),
-            [=] __host__ __device__(const Triangle &t) -> AABB {
+            [=] CPU_GPU(const Triangle &t) -> AABB {
                 return t.AABBGetter();
             },
             AABB{}, thrust::plus<AABB>());
@@ -333,17 +417,17 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
 
     //TODO have collection of all these kinds of constants
     constexpr float EPSILON = 1e-6f;
-    const Eigen::Vector3f EPS_VEC{EPSILON, EPSILON, EPSILON};
+    const Vec3f EPS_VEC{EPSILON, EPSILON, EPSILON};
 
-    Eigen::Vector3f lower = boundingBox.min - EPS_VEC;
-    Eigen::Vector3f dims = boundingBox.max - boundingBox.min + 2 * EPS_VEC;
+    Vec3f lower = boundingBox.min - EPS_VEC;
+    Vec3f dims = boundingBox.max - boundingBox.min + 2 * EPS_VEC;
 
     thrust::device_vector<uint32_t> mortonCodes(triangles.size());
     thrust::transform(
             thrust::device, trias, trias + triangles.size(), mortonCodes.begin(),
-            [=] __host__ __device__(const Triangle &tria) {
+            [=] CPU_GPU(const Triangle &tria) {
                 int numBits = 10;
-                const Eigen::Vector3f normalized =
+                const Vec3f normalized =
                         static_cast<float>(1u << numBits) *
                         (tria.AABBGetter().getCenter() - lower).array() / dims.array();
 
@@ -383,7 +467,7 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
     checkCudaErrors(cudaMallocManaged(&cdf, triangles.size() * sizeof(float)));
     thrust::transform_inclusive_scan(
             trias, trias + triangles.size(), cdf,
-            [=] __host__ __device__(const Triangle &t) -> float {
+            [=] CPU_GPU(const Triangle &t) -> float {
                 return t.getArea() / totalArea;
             },
             thrust::plus<float>());
@@ -393,7 +477,7 @@ BVH *getBVH(const std::vector<Triangle> &triangles) {
             std::chrono::high_resolution_clock::now() - start);
 
 #ifndef NDEBUG
-    std::cout << "Built BVH in " << duration.count() << "ms\n";
+    std::cout << "Built BVH in " << duration.count() << "ms for " << triangles.size() << " triangles\n";
 #endif
 
     *bvh = BVH{

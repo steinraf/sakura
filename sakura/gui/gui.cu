@@ -95,12 +95,12 @@ GUI::~GUI() {
 }
 
 struct Functor {
-    __device__ Eigen::Vector3f operator()(const Eigen::Vector3f &v) const {
+    __device__ Vec3f operator()(const Vec3f &v) const {
         auto tf = [] __device__(float f) {
             return 0.5f * (1.0f + std::tanh(f));
         };
 
-        return Eigen::Vector3f{
+        return Vec3f{
                 tf(v[0]),
                 tf(v[1]),
                 tf(v[2]),
@@ -109,7 +109,7 @@ struct Functor {
 };
 
 struct FunctorPositive {
-    __device__ Color operator()(const Eigen::Vector3f &v) const {
+    __device__ Color operator()(const Vec3f &v) const {
         auto tf = [] __device__(float f) {
             return 0.5f * (1.0f + std::tanh(2.f * f - 1.f));
         };
@@ -123,7 +123,7 @@ struct FunctorPositive {
 };
 
 struct FunctorIdentity {
-    __device__ Color operator()(const Eigen::Vector3f &v) const {
+    __device__ Color operator()(const Vec3f &v) const {
         return v;
     }
 };
@@ -132,13 +132,13 @@ struct FunctorBounded {
     const Eigen::Array3f min;
     const Eigen::Array3f extent;
     explicit FunctorBounded(const AABB &bb) : min(bb.min.array()), extent((bb.max - bb.min).array()) {}
-    __device__ Color operator()(const Eigen::Vector3f &vec) const {
+    __device__ Color operator()(const Vec3f &vec) const {
         return (vec.array() - min) / extent;
     }
 };
 
 struct FunctorUV {
-    __device__ Color operator()(const Eigen::Vector3f &v) const {
+    __device__ Color operator()(const Vec3f &v) const {
         const int numChecker = 4;
         const Color light = Color{0.8f, 0.8f, 0.8f};
         const Color dark = Color{0.2f, 0.2f, 0.2f};
@@ -166,7 +166,7 @@ void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
         std::cerr << "Truncating sensors and continuing\n";
         sensors.resize(1);
     }
-    //
+
     static constexpr float eyeWidth = 0.1;
 
     const auto width = sensors[0].film.size[0];
@@ -180,13 +180,13 @@ void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
     viewports.push_back(std::make_shared<Denoiser>(vp->getFeatureBuffer(), width, height, "Denoised Output"));
     viewports.push_back(vp);
 
-    //    cam.translate(Eigen::Vector3f{eyeWidth, 0, 0});
+    //    cam.translate(Vec3f{eyeWidth, 0, 0});
     //    auto vpClone = std::make_shared<OpenGLViewport>(scene, width, height, "Offset Viewport", cam);
     //    viewports.emplace_back(vpClone);
 
-    //    viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
+    viewports.push_back(std::make_shared<BufferVisualizer<Functor, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->normal, "Normal Buffer", width, height, Functor{}));
     //    //    viewports.push_back(std::make_shared<BufferVisualizer<FunctorPositive, BUFFERTYPE::SAMPLEVARIANCE>>(vp->getFeatureBuffer()->color, "Color Buffer Sample Variance", width, height, FunctorPositive{}));
-    //    viewports.push_back(std::make_shared<BufferVisualizer<FunctorUV, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->uv, "UV coordinates", width, height, FunctorUV{}));
+    viewports.push_back(std::make_shared<BufferVisualizer<FunctorUV, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->uv, "UV coordinates", width, height, FunctorUV{}));
     //    viewports.push_back(std::make_shared<BufferVisualizer<FunctorBounded, BUFFERTYPE::MEAN>>(vp->getFeatureBuffer()->position, "Position Buffer", width, height, FunctorBounded{scene.getBoundingBox()}));
 
     constexpr unsigned int MAX_SIZE = 4;
@@ -219,7 +219,7 @@ void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
             io.IniFilename = nullptr;
 
             if(io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-                ImGuiID dockspaceId = ImGui::GetID("MyDockSpace");
+                ImGuiID dockspaceId = ImGui::GetID("OutputDockSpace");
                 ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockspaceFlags);
 
 
@@ -358,7 +358,7 @@ void GUI::loop(const Scene &scene, std::vector<Sensor> sensors) {
     std::cout << "Exiting GUI loop\n";
 }
 
-Eigen::Vector2f GUI::getWindowSize() const {
+Vec2f GUI::getWindowSize() const {
     if(fullscreen) {
         const auto monitor = glfwGetPrimaryMonitor();
         const auto mode = glfwGetVideoMode(monitor);

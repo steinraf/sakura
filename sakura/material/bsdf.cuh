@@ -26,9 +26,9 @@ public:
 
     EMeasure measure = EMeasure::EUnknownMeasure;
 
-    __host__ __device__ BSDFQueryRecord() = default;
-    __host__ __device__ BSDFQueryRecord(Vec3f v) : wIn(v), wOut(v) {}
-    __host__ __device__ BSDFQueryRecord(Vec3f win, Vec3f wout, EMeasure measure) : wIn(win), wOut(wout), measure(measure) {}
+    CPU_GPU BSDFQueryRecord() = default;
+    CPU_GPU BSDFQueryRecord(Vec3f v) : wIn(v), wOut(v) {}
+    CPU_GPU BSDFQueryRecord(Vec3f win, Vec3f wout, EMeasure measure) : wIn(win), wOut(wout), measure(measure) {}
 
 private:
 };
@@ -43,15 +43,15 @@ public:
     BSDF &operator=(BSDF &&other) = default;
     ~BSDF() = default;
 
-    [[nodiscard]] __host__ __device__ Color eval(const BSDFQueryRecord &query) const noexcept;
-    [[nodiscard]] __host__ __device__ float pdf(const BSDFQueryRecord &query) const noexcept;
+    [[nodiscard]] CPU_GPU Color eval(const BSDFQueryRecord &query) const noexcept;
+    [[nodiscard]] CPU_GPU float pdf(const BSDFQueryRecord &query) const noexcept;
 
     [[nodiscard]] __device__ Color sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &sample) const noexcept;
 
-    [[nodiscard]] __host__ __device__ Color evalTexture(const Eigen::Vector2f &uv) const noexcept;
+    [[nodiscard]] CPU_GPU Color evalTexture(const Vec2f &uv) const noexcept;
 
-    [[nodiscard]] __host__ __device__ bool hasZeroTexture() const noexcept;
-    __host__ __device__ void setUnitTexture() noexcept;
+    [[nodiscard]] CPU_GPU bool hasZeroTexture() const noexcept;
+    CPU_GPU void setUnitTexture() noexcept;
 
 private:
     Material material;

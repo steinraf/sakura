@@ -17,14 +17,14 @@ class Texture {
 public:
     TextureType type = TextureType::CONSTANT;
 
-    [[nodiscard]] __host__ __device__ static float EMITTER_DIST() noexcept { return 1000000.0f; }
+    [[nodiscard]] CPU_GPU static float EMITTER_DIST() noexcept { return 1000000.0f; }
 
-    //    __host__ __device__ Texture() noexcept = default;
-    __host__ __device__ Texture(const Texture &other) noexcept;
-    __host__ __device__ Texture(Texture &&other) noexcept;
-    __host__ __device__ Texture &operator=(const Texture &other) noexcept;
-    __host__ __device__ Texture &operator=(Texture &&other) noexcept;
-    __host__ __device__ ~Texture() noexcept = default;
+    //    CPU_GPU Texture() noexcept = default;
+    CPU_GPU Texture(const Texture &other) noexcept;
+    CPU_GPU Texture(Texture &&other) noexcept;
+    CPU_GPU Texture &operator=(const Texture &other) noexcept;
+    CPU_GPU Texture &operator=(Texture &&other) noexcept;
+    CPU_GPU ~Texture() noexcept = default;
 
     __host__ explicit Texture() noexcept;
 
@@ -36,18 +36,18 @@ public:
     [[nodiscard]] __host__ static Texture DEFAULT() noexcept;
     [[nodiscard]] __host__ static Texture ONES() noexcept;
 
-    [[nodiscard]] __host__ __device__ explicit Texture(Color color) noexcept;
+    [[nodiscard]] CPU_GPU explicit Texture(Color color) noexcept;
 
-    [[nodiscard]] __host__ __device__ float pdf(size_t idx) const noexcept;
-    [[nodiscard]] __host__ __device__ float pdf(const EmitterQueryRecord &emitterQueryRecord) const noexcept;
+    [[nodiscard]] CPU_GPU float pdf(size_t idx) const noexcept;
+    [[nodiscard]] CPU_GPU float pdf(const EmitterQueryRecord &emitterQueryRecord) const noexcept;
 
 
-    [[nodiscard]] __host__ __device__ Color eval(const Eigen::Vector2f &uv) const noexcept;
-    [[nodiscard]] __host__ __device__ Color eval(const Ray &ray) const noexcept;
+    [[nodiscard]] CPU_GPU Color eval(const Vec2f &uv) const noexcept;
+    [[nodiscard]] CPU_GPU Color eval(const Ray &ray) const noexcept;
 
-    [[nodiscard]] __host__ __device__ Color sample(EmitterQueryRecord &emitterQueryRecord, const Eigen::Vector3f &sample) const noexcept;
+    [[nodiscard]] CPU_GPU Color sample(EmitterQueryRecord &emitterQueryRecord, const Vec3f &sample) const noexcept;
 
-    [[nodiscard]] __host__ __device__ Color getConstant() const noexcept;
+    [[nodiscard]] CPU_GPU Color getConstant() const noexcept;
 
     union {
         Color constant = {0.5f, 0.1f, 0.1f};

@@ -39,10 +39,10 @@
            2.0f;
 }
 
-__host__ __device__ Color BSDF::eval(const BSDFQueryRecord &query) const noexcept {
+CPU_GPU Color BSDF::eval(const BSDFQueryRecord &query) const noexcept {
     return material.eval(texture, query);
 }
-__host__ __device__ float BSDF::pdf(const BSDFQueryRecord &query) const noexcept {
+CPU_GPU float BSDF::pdf(const BSDFQueryRecord &query) const noexcept {
     return material.pdf(query);
 }
 
@@ -129,12 +129,12 @@ __device__ Color BSDF::sample(BSDFQueryRecord &bsdfQueryRecord, const Vec2f &ran
             return Color::Zero();
     }
 }
-__host__ __device__ Color BSDF::evalTexture(const Eigen::Vector2f &uv) const noexcept {
+CPU_GPU Color BSDF::evalTexture(const Vec2f &uv) const noexcept {
     return texture.eval(uv);
 }
-__host__ __device__ bool BSDF::hasZeroTexture() const noexcept {
+CPU_GPU bool BSDF::hasZeroTexture() const noexcept {
     return texture.type == TextureType::CONSTANT && texture.getConstant() == Color::Zero();
 }
-__host__ __device__ void BSDF::setUnitTexture() noexcept {
+CPU_GPU void BSDF::setUnitTexture() noexcept {
     texture = Texture::ONES();
 }

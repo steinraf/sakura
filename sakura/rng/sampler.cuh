@@ -8,6 +8,8 @@
 
 #include <Eigen/Dense>
 
+#include "../common.cuh"
+
 // Sampler class wrapping curandState
 class Sampler {
 public:
@@ -15,9 +17,9 @@ public:
 
     [[nodiscard]] __device__ float getSample1D() noexcept;
 
-    [[nodiscard]] __device__ Eigen::Vector2f getSample2D() noexcept;
+    [[nodiscard]] __device__ Vec2f getSample2D() noexcept;
 
-    [[nodiscard]] __device__ Eigen::Vector3f getSample3D() noexcept;
+    [[nodiscard]] __device__ Vec3f getSample3D() noexcept;
 
 private:
     curandState *rng;
@@ -26,28 +28,28 @@ private:
 namespace sample {
 
     // Naive Sampling of a uniform hemisphere
-    [[nodiscard]] __device__ Eigen::Vector3f uniformHemisphere(
-            Sampler &sampler, const Eigen::Vector3f &pole) noexcept;
+    [[nodiscard]] __device__ Vec3f uniformHemisphere(
+            Sampler &sampler, const Vec3f &pole) noexcept;
 
-    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToUniformSphere(const Eigen::Vector2f &sample) noexcept;
+    [[nodiscard]] CPU_GPU Vec3f squareToUniformSphere(const Vec2f &sample) noexcept;
 
-    [[nodiscard]] __host__ __device__ float squareToUniformSphereCapPdf(
-            const Eigen::Vector3f &v, float cosThetaMax) noexcept;
+    [[nodiscard]] CPU_GPU float squareToUniformSphereCapPdf(
+            const Vec3f &v, float cosThetaMax) noexcept;
 
-    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToUniformSphereCap(
-            const Eigen::Vector2f &sample, float cosThetaMax) noexcept;
+    [[nodiscard]] CPU_GPU Vec3f squareToUniformSphereCap(
+            const Vec2f &sample, float cosThetaMax) noexcept;
 
-    [[nodiscard]] __host__ __device__ Eigen::Vector2f squareToUniformDisk(
-            const Eigen::Vector2f &sample) noexcept;
-    
-    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToUniformTriangle(
-            const Eigen::Vector2f &sample) noexcept;
+    [[nodiscard]] CPU_GPU Vec2f squareToUniformDisk(
+            const Vec2f &sample) noexcept;
 
-    [[nodiscard]] __host__ __device__ Eigen::Vector3f squareToCosineHemisphere(
-            const Eigen::Vector2f &sample) noexcept;
-    [[nodiscard]] __host__ __device__ float squareToCosineHemispherePdf(
-            const Eigen::Vector3f &v) noexcept;
+    [[nodiscard]] CPU_GPU Vec3f squareToUniformTriangle(
+            const Vec2f &sample) noexcept;
 
-    [[nodiscard]] __host__ __device__ size_t sampleCDF(float sample, float *cdf, size_t cdfSize) noexcept;
+    [[nodiscard]] CPU_GPU Vec3f squareToCosineHemisphere(
+            const Vec2f &sample) noexcept;
+    [[nodiscard]] CPU_GPU float squareToCosineHemispherePdf(
+            const Vec3f &v) noexcept;
+
+    [[nodiscard]] CPU_GPU size_t sampleCDF(float sample, float *cdf, size_t cdfSize) noexcept;
 
 }// namespace sample

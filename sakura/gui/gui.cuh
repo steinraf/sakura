@@ -24,7 +24,7 @@ public:
 
     void loop(const Scene &scene, std::vector<Sensor> sensors);
 
-    [[nodiscard]] Eigen::Vector2f getWindowSize() const;
+    [[nodiscard]] Vec2f getWindowSize() const;
 
 private:
     bool fullscreen;
